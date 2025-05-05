@@ -1,0 +1,52 @@
+version: "3.8"
+
+services:
+  unicorn_wrangler:
+    image: ghcr.io/seesee/unicorn_wrangler:latest
+    container_name: unicorn_wrangler
+    restart: unless-stopped
+    environment:
+      # Main directories
+      GIF_DIR: /app/gifs
+      UW_CACHE_ROOT: /app/cache
+      # SQLite DB location
+      STREAM_DB: /app/cache/streamserver.sqlite3
+      # Web UI
+      WEBAPP_PORT: 5000
+      HOST: 0.0.0.0
+      # Streamserver
+      PORT: 8766
+      # Scanner
+      UW_SCANNER_PID_PATH: /cache/uw_scanner.pid
+      # Cache limit and GIFs per page
+      UW_CACHE_LIMIT: 20
+      GIFS_PER_PAGE: 20
+      # Encoder resolutions (Cosmic=32x32, Galaxy=53x11, Stellar=16x16 -- remove unused to save space)
+      LED_ENCODER_ASPECTS: "32x32,53x11,16x16"
+      # Alternative encoder path (for debugging etc)
+      # LED_ENCODER_PATH: /app/uw_encoder.py
+    volumes:
+      - uw_cache:/app/cache
+      - uw_gifs:/app/gifs
+    ports:
+      - "5766:5000"   # Web UI
+      - "8766:8766"   # Streamserver
+    # If you want to run as a specific user, add:
+    # user: "1000:1000"
+
+volumes:
+  uw_cache:
+    # For bind mount, use:
+    # driver: local
+    # driver_opts:
+    #   type: none
+    #   o: bind
+    #   device: /absolute/path/to/your/cache
+  uw_gifs:
+    # For bind mount, use:
+    # driver: local
+    # driver_opts:
+    #   type: none
+    #   o: bind
+    #   device: /absolute/path/to/your/gifs
+

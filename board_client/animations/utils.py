@@ -1,0 +1,67 @@
+import math
+import micropython
+import array
+
+# animation util functions/constants. todo: move under uw namespace?
+
+# exportable constants
+_TWO_PI = micropython.const(math.pi * 2.0)
+_INV_TWO_PI = micropython.const(1.0 / (math.pi * 2.0))
+_TABLE_SIZE = micropython.const(100)
+_TABLE_SIZE_FLOAT = micropython.const(100.0)
+
+# util functions (@micropython.native tested ~18% faster for some animations)
+
+@micropython.native
+def hsv_to_rgb(h, s, v): # type hints
+    if s == 0.0:
+        v_int = int(v * 255.0 + 0.5) # round
+        v_int = max(0, min(255, v_int)) # clamp
+        return v_int, v_int, v_int
+
+    i = int(h * 6.0)
+    f = (h * 6.0) - i
+    p = int((v * (1.0 - s)) * 255.0 + 0.5)
+    q = int((v * (1.0 - s * f)) * 255.0 + 0.5)
+    t = int((v * (1.0 - s * (1.0 - f))) * 255.0 + 0.5)
+    v_int = int(v * 255.0 + 0.5)
+
+    # clamp
+    p = max(0, min(255, p))
+    q = max(0, min(255, q))
+    t = max(0, min(255, t))
+    v_int = max(0, min(255, v_int))
+
+    i %= 6
+    if i == 0: return v_int, t, p
+    if i == 1: return q, v_int, p
+    if i == 2: return p, v_int, t
+    if i == 3: return p, q, v_int
+    if i == 4: return t, p, v_int
+    # if i == 5:
+    return v_int, p, q
+
+# array.array for lokup tables; exportable
+SIN_TABLE = array.array('f', [math.sin(i / _TABLE_SIZE_FLOAT * _TWO_PI) for i in range(_TABLE_SIZE)])
+COS_TABLE = array.array('f', [math.cos(i / _TABLE_SIZE_FLOAT * _TWO_PI) for i in range(_TABLE_SIZE)])
+
+@micropython.native
+def fast_sin(angle):
+    angle %= _TWO_PI
+    if angle < 0.0: angle += _TWO_PI
+    index_f = angle * _INV_TWO_PI * _TABLE_SIZE_FLOAT
+    index = int(index_f)
+    if index < 0: index = 0
+    if index >= _TABLE_SIZE: index = _TABLE_SIZE - 1
+    return SIN_TABLE[index]
+
+@micropython.native
+def fast_cos(angle):
+    angle %= _TWO_PI
+    if angle < 0.0: angle += _TWO_PI
+    index_f = angle * _INV_TWO_PI * _TABLE_SIZE_FLOAT
+    index = int(index_f)
+    if index < 0: index = 0
+    if index >= _TABLE_SIZE: index = _TABLE_SIZE - 1
+    return COS_TABLE[index]
+

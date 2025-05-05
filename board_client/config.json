@@ -1,0 +1,26 @@
+{
+    "display": {
+        "model": "galactic"
+    },
+    "wifi": {
+        "enable": false,
+        "ssid": "ssid",
+        "password": "password"
+    },
+    "mqtt": {
+        "enable": false,
+        "broker_ip": "192.168.1.1",
+        "broker_port": 1883,
+        "client_id": "galactic_unicorn_1"
+    },
+    "general": {
+        "max_runtime_s": 270,
+        "brightness": 0.75,
+        "debug": false
+    },
+    "streaming": {
+        "enable": false,
+        "host": "192.168.1.2",
+        "port": 8766
+    }
+}
