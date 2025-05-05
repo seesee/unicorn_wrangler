@@ -37,7 +37,7 @@ So, what exactly can it do? Well:
 ### 3. Installation
 
 1. Clone or Download this repository to your computer.
-2. Copy the files in `client_device` to your Unicorn using Thonny, mpremote, or whatever else works for you.
+2. Copy the files in `board_client` to your Unicorn using Thonny, mpremote, or whatever else works for you.
 3. Install dependencies (see above) if not already present on your device.
 4. Edit `config.json` to set your Unicorn type, WiFi credentials, MQTT broker, and other preferences.
 
