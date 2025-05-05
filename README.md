@@ -11,7 +11,7 @@ It's relatively easy to extend and create new modules that can be dropped in. Pl
 So, what exactly can it do? Well:
 
 - **Configurable Animation Playback:** Enjoy a configurable gallery of dozens of mostly-attractive animations for your Unicorn. Define a sequence, alternate between fixed and random sequences -- it's up to you.
-- **Streaming support:** Stream GIFs, videos or static images using a dedicated docker container service running on your local network over WiFi. The management tool will allow you to upload and manage gifs, jpgs, pngs, mp4s etc and process them to work on your Unicorn.
+- **Streaming support:** Stream GIFs, videos or static images using a dedicated docker container service running on your local network over WiFi. The management tool will allow you to upload and manage gifs, jpgs, pngs, mp4s etc and process them to work with your Unicorn.
 - **MQTT integration:** Harness your Unicorn with the power of MQTT (or more likely, via Home Assistant), to trigger animation changes, turn the display on or off, put it into "on air" mode, or send scrolling text messages. Your Unicorn can also publish to an MQTT topic so you know what it's up to.
 - **NTP synchronisation:** Yes, you can even use your Unicorn as a clock -- and even specify a timezone offset!
 - **Modularised control:** Don't need a feature? Just switch it off. Don't like a default? Override it in the config.
