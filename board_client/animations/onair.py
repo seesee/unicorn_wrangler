@@ -87,7 +87,7 @@ async def run(graphics, gu, state, interrupt_event):
     else:
         # Two lines, center each line horizontally, both vertically
         total_text_height = 2 * font_height + 1  # 1 pixel gap
-        y0 = (HEIGHT - total_text_height) // 2
+        y0 = (HEIGHT - total_text_height) // 2 + 1
         for i, line in enumerate(text_lines):
             text_width = graphics.measure_text(line, 1)
             x = (WIDTH - text_width) // 2
