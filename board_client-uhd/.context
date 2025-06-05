@@ -1,0 +1,5 @@
+This is a python shim that allows the unicorn_wrangler micropython project to run on a raspberry pi with the pimoroni unicorn hd hat.
+
+The idea is that only code necessary for compatability is in the project, and the versions from unicorn_wrangler are symbolically linked into the relevant places in this installation.
+
+The unicorn hd hat is broadly the same as the stellar unicorn (16x16 led display array) which is why it is treated as such.
