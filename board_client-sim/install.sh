@@ -62,7 +62,7 @@ if [ ! -f "requirements.txt" ]; then
     cat > requirements.txt << EOF
 Pillow>=8.0.0
 pygame>=2.0.0
-paho-mqtt>=1.6.0
+paho-mqtt>=2.1.0
 EOF
     echo "✓ Created requirements.txt"
 fi
