@@ -43,11 +43,15 @@ sys.modules["uw.hardware"] = sys.modules["sim.hardware_sim"]
 from uw.config import config
 from uw.logger import setup_logging, log
 from uw.state import state
+from uw.mqtt_service import MQTTService
+
 from uw.animation_service import run_random_animation, run_named_animation, get_animation_list
 from uw.background_tasks import debug_monitor
 from uw.transitions import melt_off, countdown
 
 import uasyncio
+
+state.wifi_connected = True
 
 # Minimal state for simulation (no wifi/mqtt/buttons)
 async def main():
@@ -60,6 +64,13 @@ async def main():
     # Optionally start debug monitor
     if config.get("general", "debug", False):
         uasyncio.create_task(debug_monitor())
+
+    if config.get("mqtt", "enable", False):
+        mqtt_service = MQTTService(config, state)
+        state.mqtt_service = mqtt_service
+        uasyncio.create_task(mqtt_service.loop())
+    else:
+        log("MQTT disabled.", "INFO")
 
     sequence = list(config.get("general", "sequence", ["*"]))
     animation_list = get_animation_list()
