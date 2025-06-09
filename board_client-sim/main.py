@@ -66,12 +66,16 @@ async def main():
         uasyncio.create_task(debug_monitor())
 
     if config.get("mqtt", "enable", False):
-        mqtt_service = MQTTService(config, state)
-        state.mqtt_service = mqtt_service
-        uasyncio.create_task(mqtt_service.loop())
+        try:
+            mqtt_service = MQTTService(config, state)
+            state.mqtt_service = mqtt_service
+            uasyncio.create_task(mqtt_service.loop())
+            log("MQTT service started.", "INFO")
+        except Exception as e:
+            log(f"Failed to start MQTT service: {e}", "ERROR")
+            state.mqtt_service = None
     else:
         log("MQTT disabled.", "INFO")
-
     sequence = list(config.get("general", "sequence", ["*"]))
     animation_list = get_animation_list()
 
