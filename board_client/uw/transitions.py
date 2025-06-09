@@ -4,6 +4,7 @@ import utime
 import uasyncio
 
 from uw.hardware import graphics, gu, WIDTH, HEIGHT
+from uw.logger import log
 from animations.utils import hsv_to_rgb
 
 async def melt_off():
@@ -12,6 +13,7 @@ async def melt_off():
     cleared_count = 0
     black_pen = graphics.create_pen(0, 0, 0)
     graphics.set_pen(black_pen)
+    log("Melting off", "INFO")
 
     while cleared_count < total:
         for _ in range(10):  # Clear 10 pixels per frame for speed
@@ -34,6 +36,7 @@ async def countdown():
 
     graphics.set_font("bitmap8")
     font_height = 8  # bitmap8 is 8 pixels high
+    log("Counting down...", "INFO")
 
     for index, digit in enumerate(digits):
         # colour cycle based on time + digit index

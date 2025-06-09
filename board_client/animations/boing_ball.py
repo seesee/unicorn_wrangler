@@ -52,11 +52,15 @@ def draw_logo(graphics, t):
             graphics.pixel(int(px), int(py))
 
 async def run(graphics, gu, state, interrupt_event):
-    ROOM_X_MIN, ROOM_X_MAX = 2, WIDTH - 3
-    ROOM_Y_MIN, ROOM_Y_MAX = 2, HEIGHT - 3
-    ROOM_Z_MIN, ROOM_Z_MAX = 2, min(WIDTH, HEIGHT) // 2
+    # Room bounds scale with display size
+    margin = max(2, min(WIDTH, HEIGHT) // 8)
+    ROOM_X_MIN, ROOM_X_MAX = margin, WIDTH - margin - 1
+    ROOM_Y_MIN, ROOM_Y_MAX = margin, HEIGHT - margin - 1
+    ROOM_Z_MIN, ROOM_Z_MAX = 0, min(WIDTH, HEIGHT) // 2
 
-    BALL_RADIUS = 2.5
+    # Ball radius and speed scale with display size
+    BASE_RADIUS = max(2, min(WIDTH, HEIGHT) // 7)
+    BALL_RADIUS = BASE_RADIUS
     BALL_COLOR_1 = (0.0, 1.0, 1.0)  # red
     BALL_COLOR_2 = (0.0, 0.0, 1.0)  # white
 
@@ -64,12 +68,14 @@ async def run(graphics, gu, state, interrupt_event):
     galactic_mode = (MODEL == "galactic")
     y_center = (ROOM_Y_MIN + ROOM_Y_MAX) / 2
 
+    # Ball speed scales with display size
+    speed_scale = max(0.15, min(WIDTH, HEIGHT) / 32.0)
     x = random.uniform(ROOM_X_MIN + BALL_RADIUS, ROOM_X_MAX - BALL_RADIUS)
     y = y_center if galactic_mode else random.uniform(ROOM_Y_MIN + BALL_RADIUS, ROOM_Y_MAX - BALL_RADIUS)
     z = random.uniform(ROOM_Z_MIN + BALL_RADIUS, ROOM_Z_MAX - BALL_RADIUS)
-    vx = random.choice([-1, 1]) * (0.2 + random.random() * 0.7)
-    vy = 0 if galactic_mode else random.choice([-1, 1]) * (0.2 + random.random() * 0.7)
-    vz = random.choice([-1, 1]) * (0.5 + random.random() * 0.7)
+    vx = random.choice([-1, 1]) * (0.12 + random.random() * 0.25) * speed_scale
+    vy = 0 if galactic_mode else random.choice([-1, 1]) * (0.12 + random.random() * 0.25) * speed_scale
+    vz = random.choice([-1, 1]) * (0.18 + random.random() * 0.25) * speed_scale
     spin = random.uniform(0, 2 * math.pi)
     spin_rate = 0.12
 
@@ -77,7 +83,13 @@ async def run(graphics, gu, state, interrupt_event):
 
     t = 0.0
 
+    # The "tick" floats at the midpoint in Z
+    tick_z = (ROOM_Z_MIN + ROOM_Z_MAX) / 2
+
+    FRAME_DELAY = 0.025  # ~40 FPS, adjust as needed
+
     while not interrupt_event.is_set():
+        # Update ball position
         x += vx
         if not galactic_mode:
             y += vy
@@ -134,35 +146,47 @@ async def run(graphics, gu, state, interrupt_event):
 
         # adjust ball size/brightness on z axis (smaller, dimmer when further away)
         z_norm = (z - ROOM_Z_MIN) / (ROOM_Z_MAX - ROOM_Z_MIN)
-        radius = BALL_RADIUS + 2.5 * z_norm
+        radius = BALL_RADIUS + 2.0 * z_norm
         brightness = 0.5 + 0.5 * z_norm
 
         graphics.set_pen(graphics.create_pen(0, 0, 0))
         graphics.clear()
 
-        draw_logo(graphics, t)
-
-        # draw ball (checkered pattern, spinning)
-        cx, cy = int(round(x)), int(round(y))
-        r_int = int(round(radius))
-        for px in range(cx - r_int, cx + r_int + 1):
-            for py in range(cy - r_int, cy + r_int + 1):
-                dx = px - cx
-                dy = py - cy
-                dist_sq = dx * dx + dy * dy
-                if dist_sq <= r_int * r_int:
-                    # checker pattern based on angle/spin
-                    angle = math.atan2(dy, dx) + spin
-                    checker = int((angle / (math.pi / 4))) % 2
-                    if checker == 0:
-                        h, s, v = BALL_COLOR_1
-                    else:
-                        h, s, v = BALL_COLOR_2
-                    r, g, b = hsv_to_rgb(h, s, v * brightness)
-                    if 0 <= px < WIDTH and 0 <= py < HEIGHT:
-                        graphics.set_pen(graphics.create_pen(r, g, b))
-                        graphics.pixel(px, py)
+        # Layering: draw tick and ball in correct order
+        # If ball is "closer" (z > tick_z), draw tick first, then ball (ball in front)
+        # If ball is "further" (z < tick_z), draw ball first, then tick (tick in front)
+        if z < tick_z:
+            # Ball is behind tick
+            # Draw ball first, then tick
+            draw_ball(graphics, x, y, radius, spin, brightness)
+            draw_logo(graphics, t)
+        else:
+            # Ball is in front of tick
+            # Draw tick first, then ball
+            draw_logo(graphics, t)
+            draw_ball(graphics, x, y, radius, spin, brightness)
 
         gu.update(graphics)
         t += 0.04
-        await uasyncio.sleep(0.01)
+        await uasyncio.sleep(FRAME_DELAY)
+
+def draw_ball(graphics, x, y, radius, spin, brightness):
+    cx, cy = int(round(x)), int(round(y))
+    r_int = int(round(radius))
+    for px in range(cx - r_int, cx + r_int + 1):
+        for py in range(cy - r_int, cy + r_int + 1):
+            dx = px - cx
+            dy = py - cy
+            dist_sq = dx * dx + dy * dy
+            if dist_sq <= r_int * r_int:
+                # checker pattern based on angle/spin
+                angle = math.atan2(dy, dx) + spin
+                checker = int((angle / (math.pi / 4))) % 2
+                if checker == 0:
+                    h, s, v = (0.0, 1.0, 1.0)
+                else:
+                    h, s, v = (0.0, 0.0, 1.0)
+                r, g, b = hsv_to_rgb(h, s, v * brightness)
+                if 0 <= px < WIDTH and 0 <= py < HEIGHT:
+                    graphics.set_pen(graphics.create_pen(r, g, b))
+                    graphics.pixel(px, py)
