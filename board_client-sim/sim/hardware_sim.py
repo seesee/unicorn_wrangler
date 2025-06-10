@@ -13,7 +13,8 @@ elif MODEL == "stellar":
 else:
     raise RuntimeError(f"Unknown model: {MODEL}")
 
-PIXEL_SIZE = 18  # Size of each LED "pixel" in the window
+# Size of each LED "pixel" in the window
+PIXEL_SIZE = int(os.environ.get("UNICORN_SIM_PIXEL_SIZE", 18))
 
 class GraphicsSim:
     def __init__(self):

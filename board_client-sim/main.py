@@ -23,6 +23,20 @@ parser.add_argument(
     default="cosmic",
     help="Which Unicorn model to simulate (default: cosmic)"
 )
+
+parser.add_argument(
+    "--pixel-size",
+    type=int,
+    default=18,
+    help="Size of each simulated LED pixel (default: 18)"
+)
+parser.add_argument(
+    "--animation",
+    type=str,
+    default=None,
+    help="Force a specific animation to run (overrides config sequence)"
+)
+
 args = parser.parse_args()
 
 # Patch sys.path so imports work
@@ -31,6 +45,7 @@ sys.path.insert(0, os.path.abspath("."))
 
 # Set environment variable for model selection
 os.environ["UNICORN_SIM_MODEL"] = args.model
+os.environ["UNICORN_SIM_PIXEL_SIZE"] = str(args.pixel_size)
 
 # Import the simulation hardware layer
 from sim.hardware_sim import graphics, gu, set_brightness, WIDTH, HEIGHT, MODEL
@@ -48,6 +63,11 @@ from uw.mqtt_service import MQTTService
 from uw.animation_service import run_random_animation, run_named_animation, get_animation_list
 from uw.background_tasks import debug_monitor
 from uw.transitions import melt_off, countdown
+
+# Force sequence override (handy for debugging specific animations) 
+if args.animation:
+    # Override the animation sequence in config
+    config._config["general"]["sequence"] = [args.animation]
 
 import uasyncio
 
