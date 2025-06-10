@@ -88,7 +88,6 @@ async def run(graphics, gu, state, interrupt_event):
 
     zoom_period = 8.0  # seconds for a full in-out-in cycle
 
-    face_normals = [face_normal(f) for f in FACES]
 
     t = 0.0
     color_hue = 0.0
