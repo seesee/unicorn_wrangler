@@ -81,9 +81,10 @@ if [ ! -L "wireframes" ]; then
             echo "Skipping wireframes symlink creation"
         fi
     fi
-    
+
     if [ ! -e "wireframes" ]; then
-        ln -sf ../board_client/wireframes animations
+-        ln -sf ../board_client/wireframes animations
++        ln -sf ../board_client/wireframes wireframes
         echo "✓ Created symlink to wireframes"
     fi
 else
