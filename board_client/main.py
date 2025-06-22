@@ -1,4 +1,6 @@
 import uasyncio
+import machine
+
 from uw.config import config
 from uw.logger import setup_logging, log
 from uw.hardware import graphics, gu, set_brightness
@@ -16,7 +18,48 @@ def rotate_sequence(seq):
     seq.append(item)
     return item
 
-# todo: refactor and handle as normal interrupt?
+def draw_startup_grid(graphics, gu, wifi_status, ntp_status, mqtt_status, streaming_status):
+    WIDTH, HEIGHT = graphics.get_bounds()
+
+    def get_colour(status):
+        if status == "on":
+            return (0, 255, 0)
+        elif status == "fail":
+            return (255, 0, 0)
+        elif status == "connecting":
+            return (255, 255, 0)
+        else:
+            return (0, 0, 255)
+
+    grid_w, grid_h = 5, 5
+    x0 = (WIDTH - grid_w) // 2
+    y0 = (HEIGHT - grid_h) // 2
+
+    quadrants = {
+        "wifi":      [(0, 0), (1, 0), (0, 1), (1, 1)],
+        "ntp":       [(3, 0), (4, 0), (3, 1), (4, 1)],
+        "mqtt":      [(0, 3), (1, 3), (0, 4), (1, 4)],
+        "streaming": [(3, 3), (4, 3), (3, 4), (4, 4)],
+    }
+    status_map = {
+        "wifi": wifi_status,
+        "ntp": ntp_status,
+        "mqtt": mqtt_status,
+        "streaming": streaming_status,
+    }
+
+    for key in quadrants:
+        colour = get_colour(status_map[key])
+        pen = graphics.create_pen(colour[0], colour[1], colour[2])
+        graphics.set_pen(pen)
+        for pos in quadrants[key]:
+            graphics.pixel(x0 + pos[0], y0 + pos[1])
+
+    graphics.set_pen(graphics.create_pen(200, 200, 200))
+    graphics.pixel(x0 + 2, y0 + 2)
+
+    gu.update(graphics)
+
 async def handle_text_interrupt():
     if state.interrupt_event.is_set():
         state.interrupt_event.clear()
@@ -31,23 +74,48 @@ async def handle_text_interrupt():
     return False
 
 async def main():
-    # setup logging, default brightness and hardware
     setup_logging(config.get("general", "debug", False))
     set_brightness(config.get("general", "brightness", 0.75))
     graphics.set_pen(graphics.create_pen(0, 0, 0))
     graphics.clear()
     gu.update(graphics)
 
-    # explicitly wait for wifi before starting anything else
+    wifi_status = "off"
     if config.get("wifi", "enable", False):
-        log("Attempting initial WiFi connection and NTP sync...", "INFO")
-        await connect_wifi()
-        uasyncio.create_task(wifi_monitor())
-        if config.get("general", "ntp_enable", True):
-            set_rtc_from_ntp(config.get("general", "ntp_host", "pool.ntp.org"))
-            uasyncio.create_task(periodic_ntp_sync(config.get("general", "ntp_periodic_update_hours", 12)))
-    else:
-        log("WiFi disabled.", "INFO")
+        draw_startup_grid(graphics, gu, "connecting", "off", "off", "off")
+        await uasyncio.sleep(0.1)
+        wifi_ok = await connect_wifi()
+        wifi_status = "on" if wifi_ok else "fail"
+    draw_startup_grid(graphics, gu, wifi_status, "off", "off", "off")
+    await uasyncio.sleep(0.1)
+
+    ntp_status = "off"
+    if config.get("general", "ntp_enable", True):
+        draw_startup_grid(graphics, gu, wifi_status, "connecting", "off", "off")
+        await uasyncio.sleep(0.1)
+        ntp_ok = set_rtc_from_ntp(config.get("general", "ntp_host", "pool.ntp.org"))
+        ntp_status = "on" if ntp_ok else "fail"
+    draw_startup_grid(graphics, gu, wifi_status, ntp_status, "off", "off")
+    await uasyncio.sleep(0.1)
+
+    mqtt_status = "off"
+    if config.get("mqtt", "enable", False):
+        draw_startup_grid(graphics, gu, wifi_status, ntp_status, "connecting", "off")
+        await uasyncio.sleep(0.1)
+        mqtt_service = MQTTService()
+        state.mqtt_service = mqtt_service
+        mqtt_ok = await mqtt_service.connect()
+        mqtt_status = "on" if mqtt_ok else "fail"
+    draw_startup_grid(graphics, gu, wifi_status, ntp_status, mqtt_status, "off")
+    await uasyncio.sleep(0.1)
+
+    streaming_status = "on" if config.get("streaming", "enable", False) else "off"
+    draw_startup_grid(graphics, gu, wifi_status, ntp_status, mqtt_status, streaming_status)
+    await uasyncio.sleep(0.1)
+
+    graphics.set_pen(graphics.create_pen(0, 0, 0))
+    graphics.clear()
+    gu.update(graphics)
 
     # button monitoring task
     uasyncio.create_task(button_monitor())
@@ -65,6 +133,7 @@ async def main():
     # set animation sequence
     sequence = list(config.get("general", "sequence", ["streaming", "*"]))
     animation_list = get_animation_list()
+    state.max_iterations = config.get("general", "max_iterations", -1)
 
     # main loop
     while True:
@@ -78,15 +147,24 @@ async def main():
         if await handle_text_interrupt():
             continue
 
-        # job sequence is an oraboros
-        job = rotate_sequence(sequence)
+        if state.max_iterations != 0:
+            # job sequence is an oraboros
+            job = rotate_sequence(sequence)
 
-        if job == "*" or job == "animation":
-            await run_random_animation(config.get("general", "max_runtime_s", 120))
-        elif job in animation_list:
-            await run_named_animation(job, config.get("general", "max_runtime_s", 120))
+            if state.max_iterations > 0 and state.next_animation != "onair":
+                # onair can loop indefinitely; only count non-onair iterations
+                state.max_iterations -= 1
+
+            if job == "*" or job == "animation":
+                await run_random_animation(config.get("general", "max_runtime_s", 120))
+            elif job in animation_list:
+                await run_named_animation(job, config.get("general", "max_runtime_s", 120))
+            else:
+                log(f"Unknown sequence job: {job}", "WARN")
         else:
-            log(f"Unknown sequence job: {job}", "WARN")
+            # Support maximum iteration limit to work around Pico 1 memory fragmentation
+            log(f"Maximum iterations reached, resetting", "INFO")
+            machine.reset()
 
         if await handle_text_interrupt():
             continue
@@ -104,6 +182,5 @@ if __name__ == "__main__":
         except Exception:
             pass
         # try to reset/restart device 
-        import machine
         machine.reset()
 

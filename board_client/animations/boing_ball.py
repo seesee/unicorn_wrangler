@@ -8,7 +8,7 @@ from uw.hardware import WIDTH, HEIGHT
 BALL_SIZE = 20  # pixels (diameter)
 BOX_SIZE = 80   # virtual box (width and height)
 BALL_SPEED = 1.2  # pixels per frame (tweak for smoothness)
-SPIN_SPEED = 0.06  # radians per frame
+SPIN_SPEED = 0.08  # radians per frame
 
 # --- AMIGA TICK LOGO (relative to center) ---
 TICK_PIXELS = [

@@ -98,3 +98,7 @@ class uwPrng:
             a, b = b, a
         rng = b - a + 1
         return a + (self.next() % rng)
+
+    def randfloat(self, a=0.0, b=1.0):
+        fraction = self.next() / 4294967295.0  # 0xFFFFFFFF
+        return a + (b - a) * fraction

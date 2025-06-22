@@ -36,6 +36,26 @@ else
     echo "✓ Animations symlink already exists"
 fi
 
+# Symlink wireframes
+if [ ! -L "wireframes" ]; then
+    if [ -d "wireframes" ]; then
+        echo "WARNING: wireframes directory exists (not a symlink)"
+        read -p "Remove and create symlink? (Y/N): " -n 1 -r
+        echo ""
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            rm -rf wireframes
+        else
+            echo "Skipping wireframes symlink"
+        fi
+    fi
+    if [ ! -e "wireframes" ]; then
+        ln -sf ../board_client/wireframes wireframes
+        echo "✓ Created symlink to wireframes"
+    fi
+else
+    echo "✓ Wireframes symlink already exists"
+fi
+
 # Symlink uw
 if [ ! -L "uw" ]; then
     if [ -d "uw" ]; then
