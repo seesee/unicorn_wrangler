@@ -3,12 +3,16 @@ import math
 import random
 import gc
 
-from animations.utils import hsv_to_rgb
+from animations.utils import (
+    uwPrng, hsv_to_rgb 
+)
+
+prng = uwPrng()
 
 async def run(graphics, gu, state, interrupt_event):
     # conway's game of life + coloured, merging cells.
     WIDTH, HEIGHT = graphics.get_bounds()
-    INITIAL_DENSITY = 0.25
+    INITIAL_DENSITY = prng.randfloat(0.20, 0.30)
     SATURATION = 1.0
     VALUE = 1.0
     UPDATE_INTERVAL = 0.15

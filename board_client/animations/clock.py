@@ -31,11 +31,11 @@ async def run(graphics, gu, state, interrupt_event):
 
 async def run_bouncing_datetime(graphics, gu, state, interrupt_event):
     graphics.set_font("bitmap6")
+    # Start at a random grid position that fits the text
     x = random.randint(0, WIDTH - 1)
     y = random.randint(0, HEIGHT - 8)
     dx = random.choice([-1, 1])
     dy = random.choice([-1, 1])
-    speed = 0.7 + random.random() * 0.5
     hue = random.random()
 
     while not interrupt_event.is_set():
@@ -44,35 +44,37 @@ async def run_bouncing_datetime(graphics, gu, state, interrupt_event):
         if year < 2025:
             return
         day_str = DAYS[wday % 7]
-        time_str = "{:02d}:{:02d}:{:02d}".format(hour, minute, second)
+        
+        #time_str = "{:02d}:{:02d}:{:02d}".format(hour, minute, second)
+        time_str = "{:02d}:{:02d}".format(hour, minute)
         date_str = "{:02d}/{:02d}/{}".format(mday, month, year)
-        #msg = f"{day_str} {date_str} {time_str}"
         msg = f"{time_str}"
 
         text_width = graphics.measure_text(msg, 1)
         text_height = 8
 
-        x += dx * speed
-        y += dy * speed
+        # Move by exactly one pixel diagonally
+        x += dx
+        y += dy
 
         bounced = False
 
         if x < 0:
             x = 0
-            dx = abs(dx)
+            dx = 1
             bounced = True
         elif x > WIDTH - text_width:
             x = WIDTH - text_width
-            dx = -abs(dx)
+            dx = -1
             bounced = True
 
         if y < 0:
             y = 0
-            dy = abs(dy)
+            dy = 1
             bounced = True
         elif y > HEIGHT - text_height:
             y = HEIGHT - text_height
-            dy = -abs(dy)
+            dy = -1
             bounced = True
 
         if bounced:
@@ -84,7 +86,7 @@ async def run_bouncing_datetime(graphics, gu, state, interrupt_event):
         r, g, b = hsv_to_rgb(hue, 1.0, 1.0)
         pen = graphics.create_pen(r, g, b)
         graphics.set_pen(pen)
-        graphics.text(msg, int(x), int(y), -1, 1)
+        graphics.text(msg, x, y, -1, 1)
 
         gu.update(graphics)
         await uasyncio.sleep(0.13)
