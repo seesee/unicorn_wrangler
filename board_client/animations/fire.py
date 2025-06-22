@@ -3,7 +3,7 @@ import random
 import micropython
 
 from animations.utils import hsv_to_rgb
-from uw.hardware import WIDTH, HEIGHT, MODEL
+from uw.hardware import MODEL
 
 @micropython.native
 async def run(graphics, gu, state, interrupt_event):
