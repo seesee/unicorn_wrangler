@@ -70,6 +70,7 @@ async def run(graphics, gu, state, interrupt_event):
     white_pen = graphics.create_pen(255, 255, 255)
     explosion_orange_pen = graphics.create_pen(255, 150, 0)
     explosion_yellow_pen = graphics.create_pen(255, 220, 0)
+    explosion_orange_pen = graphics.create_pen(255, 150, 0)
     explosion_yellow_pen = graphics.create_pen(255, 220, 0)
 
     brightness_pens = []
