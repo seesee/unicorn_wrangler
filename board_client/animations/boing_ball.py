@@ -1,6 +1,5 @@
 import uasyncio
 import math
-import time
 
 from animations.utils import hsv_to_rgb
 from uw.hardware import WIDTH, HEIGHT
