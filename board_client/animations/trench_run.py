@@ -280,7 +280,7 @@ async def run(graphics, gu, state, interrupt_event):
                 laser["progress"] += 0.12
                 prog = min(1.0, laser["progress"])
                 tower = laser["source_tower"]
-                laser_height = tower["height"]
+                start_x, start_y = project_flight(
                 start_x, start_y = project_flight(
                     tower["side"], tower["height"], tower["z"],
                     cos_roll, sin_roll, cos_pitch, sin_pitch, altitude, shake_x, shake_y, wall_mode=True
