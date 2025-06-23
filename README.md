@@ -162,4 +162,4 @@ Using Thonny, mpremote or minicom will provide access to reasonably good logs to
 
 🌈🦄
 
-![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/seesee/unicorn_wrangler?utm_source=oss&utm_medium=github&utm_campaign=seesee%2Funicorn_wrangler&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
+![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/seesee/unicorn_wrangler)
