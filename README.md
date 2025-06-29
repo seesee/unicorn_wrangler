@@ -1,8 +1,8 @@
 # Unicorn Wrangler
 
-Unicorn Wrangler provides a framework that brings a dazzling array (or at least, an array) of functions to your Pimoroni (Galactic, Cosmic, Stellar) Unicorn, powered by an RPi Pico W (1 or 2). It is the culmination of an experiment to see exactly what I could get it to do. As it became increasingly feature rich, I realised there was an opportunity to "put it out there" in case anyone else found it (or bits of it) useful. Maybe I'll tell the full story one day.
+Unicorn Wrangler provides a framework that brings a dazzling array (or at least, an array) of functions to your Pimoroni (Galactic, Cosmic, Stellar) Unicorn, powered by an RPi Pico W (1 or 2). 
 
-It's relatively easy to extend and create new modules that can be dropped in. Please feel free to share if you do so, and I'll add them into the main repository.
+It provides a relatively easy mechanism to extend and create new animation modules that can be dropped into the main animations directory. (Please feel free to share if you do so, and I'll add them into the main repository).
 
 ---
 
@@ -28,6 +28,8 @@ So, what exactly can it do? Well:
 - (Optional) WiFi network
 - (Optional) MQTT broker
 - (Optional) Somewhere you can run a local docker container (for streaming and basic transcoding).
+
+A simulator for running on a desktop host is also provided (tested on Linux and MacOS, YMMV on Windows but it should probably work).
 
 ### 2. Software Requirements
 
@@ -107,7 +109,7 @@ Some included animations:
 - Maze Generator
 - Sparkles
 - Failsafe
-- ...and many more (36 total but they aren't all winners)
+- ...and dozens more (but they aren't all winners)
 
 ---
 
@@ -126,11 +128,11 @@ You can control:
 
 ## Contributing and Notes
 
-Pull requests, new animations, and improvements are welcome. There will be bugs. I've tested on the Galactic Unicorn (P1), and Cosmic Unicorn (P1 and P2 versions), but not the Stellar Unicorn. All core functionality will work just fine (just as it will on any Pico W with the Pimoroni micropython installed), but some animations might not render properly. 
+Pull requests, new animations, and improvements are welcome. There will be bugs. I've tested on the Galactic Unicorn (P1), and Cosmic Unicorn (P1 and P2 versions), but not the Stellar Unicorn. I have however tested on the Unicorn HD running on a Raspberry Pi 3A in UHD mode, and can confirm it works quite well there too. All core functionality will work just fine (just as it will on any Pico W with the Pimoroni micropython installed), but some animations might not render properly. 
 
 Please keep in mind the constraints of MicroPython and the Pico W. 
 
-All animations run stably on both V1 and V2 of the Pico W Unicorns, however the Pico W V2 does run some things a little smoother due to its (moderately) increased power. Please also keep these constraints in mind. An earlier version was able to run for ~17 minutes before crashing and restarting.
+All animations run stably on both V1 and V2 of the Pico W Unicorns, however the Pico W V2 does run some things a little smoother due to its (moderately) increased power. Please also keep these constraints in mind. An earlier version was able to run for ~17 minutes before crashing and restarting. I recommend setting a maximum of 20 iterations (set in config.json -> general -> max_iterations: 20) for Pico 1 devices (this will restart the device automatically after 20 animations have been played, you can increase or decrease this depending on which animations you're using or whether you are using streaming. The limited memory on the Pico 1 units means that even clearing the memory as we do leads to situations where it is impossible to allocate enough contiguous memory which leads to an eventual crash that might not be recoverable. I've tried to find better solutions but options in micropython for memory management are quite limited. Better solutions will be gratefully welcomed).
 
 ---
 
@@ -153,7 +155,7 @@ MIT License (see LICENSE file).
 
 - **WiFi not connecting?** Double-check your SSID and password in `config.json`.
 - **MQTT not working?** Ensure your broker is reachable and topics are correct.
-- **Animations not running?** Check for typos in animation filenames or syntax errors in the device logs.
+- **Animations not running?** Check for typos in animation filenames or syntax errors in the device logs. (Use the simulator or check what is output to serial).
 - **Experiencing lockups or streaming issues?** I've found moving the Unicorn a few inches to the left or right can mean the difference between smooth solid playback and the jankiest, most unwatchable mess. Also note: The MQTT library used is not asynchronous. This usually doesn't matter, but it will lock up the Unicorn for several seconds if it ever needs to reconnect to the broker due to network instability etc. If you aren't using MQTT, disable it.
 
 Using Thonny, mpremote or minicom will provide access to reasonably good logs to help identify and address issues. Additional debug logging can be enabled in the config.
