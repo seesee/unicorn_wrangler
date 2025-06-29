@@ -3,6 +3,7 @@ import random
 
 from animations.utils import hsv_to_rgb
 from uw.hardware import WIDTH, HEIGHT
+from collections import deque
 
 # 9x5 pixel "pi" symbol (1 = pixel on, 0 = pixel off)
 PI_BITMAP = [
@@ -16,7 +17,22 @@ PI_BITMAP = [
 PI_W = len(PI_BITMAP[0])
 PI_H = len(PI_BITMAP)
 
+TRAIL_LENGTH = 4
+BRIGHTNESS_FALLOFF = 0.2
+
+def _draw_pi(graphics, x, y, pen):
+    graphics.set_pen(pen)
+    for row in range(PI_H):
+        for col in range(PI_W):
+            if PI_BITMAP[row][col]:
+                px = x + col
+                py = y + row
+                if 0 <= px < WIDTH and 0 <= py < HEIGHT:
+                    graphics.pixel(px, py)
+
 async def run(graphics, gu, state, interrupt_event):
+    trail = deque((), TRAIL_LENGTH)
+
     x = random.randint(0, WIDTH - PI_W)
     y = random.randint(0, HEIGHT - PI_H)
     dx = random.choice([-1, 1])
@@ -24,7 +40,11 @@ async def run(graphics, gu, state, interrupt_event):
 
     hue = random.random()
 
+    black_pen = graphics.create_pen(0, 0, 0)
+
     while not interrupt_event.is_set():
+        trail.append((x, y))
+
         x += dx
         y += dy
 
@@ -52,19 +72,20 @@ async def run(graphics, gu, state, interrupt_event):
         if bounced:
             hue = (hue + 0.18 + random.uniform(0, 0.2)) % 1.0
 
-        graphics.set_pen(graphics.create_pen(0, 0, 0))
+        graphics.set_pen(black_pen)
         graphics.clear()
 
+        for i, (trail_x, trail_y) in enumerate(trail):
+            # Fade the trail out
+            v = BRIGHTNESS_FALLOFF ** (len(trail) - i)
+            r, g, b = hsv_to_rgb(hue, 1.0, v)
+            trail_pen = graphics.create_pen(r, g, b)
+            _draw_pi(graphics, trail_x, trail_y, trail_pen)
+
+        # Draw the new pi
         r, g, b = hsv_to_rgb(hue, 1.0, 1.0)
-        pen = graphics.create_pen(r, g, b)
-        for row in range(PI_H):
-            for col in range(PI_W):
-                if PI_BITMAP[row][col]:
-                    px = x + col
-                    py = y + row
-                    if 0 <= px < WIDTH and 0 <= py < HEIGHT:
-                        graphics.set_pen(pen)
-                        graphics.pixel(px, py)
+        color_pen = graphics.create_pen(r, g, b)
+        _draw_pi(graphics, x, y, color_pen)
 
         gu.update(graphics)
         await uasyncio.sleep(0.12)
