@@ -147,7 +147,7 @@ MIT License (see LICENSE file).
 - Pimoroni for the Unicorn hardware and MicroPython drivers
 - MicroPython community
 - All contributors and testers
-- t3.chat for access to various LLM models that were quite useful when they weren't hallucinating or spouting total b**ll**cks.
+- t3.chat for access to various LLM models that were quite useful when they weren't hallucinating or spouting total b\*ll\*cks.
 
 ---
 
