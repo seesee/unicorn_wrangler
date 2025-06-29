@@ -3,6 +3,7 @@ import random
 
 from animations.utils import hsv_to_rgb
 from uw.hardware import WIDTH, HEIGHT
+from collections import deque
 
 # 9x5 pixel "pi" symbol (1 = pixel on, 0 = pixel off)
 PI_BITMAP = [
@@ -16,36 +17,9 @@ PI_BITMAP = [
 PI_W = len(PI_BITMAP[0])
 PI_H = len(PI_BITMAP)
 
-def _draw_pi(graphics, x, y, pen):
-    graphics.set_pen(pen)
-    for row in range(PI_H):
-        for col in range(PI_W):
-            if PI_BITMAP[row][col]:
-                px = x + col
-                py = y + row
-                if 0 <= px < WIDTH and 0 <= py < HEIGHT:
-                    graphics.pixel(px, py)
-
-
-from collections import deque
-
-# The number of trail steps to blend through
 TRAIL_LENGTH = 4
 BRIGHTNESS_FALLOFF = 0.2
 
-
-# 9x5 pixel "pi" symbol (1 = pixel on, 0 = pixel off)
-PI_BITMAP = [
-    [0,1,0,1,1,1,1,1,1],
-    [1,0,1,0,0,0,1,0,0],
-    [0,0,1,0,0,0,1,0,0],
-    [0,0,1,0,0,0,1,0,1],
-    [0,1,0,0,0,0,1,1,0],
-]
-
-PI_W = len(PI_BITMAP[0])
-PI_H = len(PI_BITMAP)
-
 def _draw_pi(graphics, x, y, pen):
     graphics.set_pen(pen)
     for row in range(PI_H):
@@ -55,7 +29,6 @@ def _draw_pi(graphics, x, y, pen):
                 py = y + row
                 if 0 <= px < WIDTH and 0 <= py < HEIGHT:
                     graphics.pixel(px, py)
-
 
 async def run(graphics, gu, state, interrupt_event):
     trail = deque((), TRAIL_LENGTH)

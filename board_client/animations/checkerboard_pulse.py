@@ -3,10 +3,9 @@ import math
 import random
 import utime
 
-from animations.utils import hsv_to_rgb, fast_sin, fast_cos, SIN_TABLE, COS_TABLE
+from animations.utils import hsv_to_rgb, SIN_TABLE, COS_TABLE
 from uw.hardware import WIDTH, HEIGHT
 
-# --- Configurable Parameters ---
 CONFIG_CHANGE_INTERVAL_S = 20.0
 FADE_DURATION_S = 1.5
 SCROLL_SPEED_X = 4.0
@@ -16,9 +15,7 @@ ZOOM_MIN = 0.7
 ZOOM_MAX = 1.3
 PULSE_SPEED = 0.8
 
-# --- Fixed-Point Math Setup ---
 SCALE = 1024
-
 
 async def run(graphics, gu, state, interrupt_event):
     centre_x_scaled = int(((WIDTH - 1) / 2.0) * SCALE)
@@ -65,10 +62,10 @@ async def run(graphics, gu, state, interrupt_event):
         v = v1 + (v2 - v1) * t
         return h, s, v
 
-    # --- Main Loop Setup ---
     last_frame_time_ms = utime.ticks_ms()
     last_change_time_s = last_frame_time_ms / 1000.0
     in_transition = False
+    transition_start_time = 0.0
     zoom_phase_rad = 0.0
     pulse_phase_rad = 0.0
 
@@ -81,7 +78,6 @@ async def run(graphics, gu, state, interrupt_event):
         last_frame_time_ms = current_time_ms
         current_time_s = current_time_ms / 1000.0
 
-        # --- Update State ---
         zoom_phase_rad += ZOOM_SPEED * delta_t_s
         pulse_phase_rad += PULSE_SPEED * delta_t_s
         zoom_normalized = (math.sin(zoom_phase_rad) + 1.0) / 2.0
@@ -92,13 +88,11 @@ async def run(graphics, gu, state, interrupt_event):
         if in_transition and next_params:
             update_pattern_state(next_params, delta_t_s, current_zoom_scaled)
 
-        # --- Handle Transitions ---
         if not in_transition and current_time_s - last_change_time_s >= CONFIG_CHANGE_INTERVAL_S:
             in_transition = True
             transition_start_time = current_time_s
             next_params = create_random_params()
 
-        # --- Render Frame ---
         pulse = 0.5 + 0.5 * math.sin(pulse_phase_rad)
         size_scaled = current_params["checker_size"] * current_zoom_scaled
         sin_angle = get_scaled_trig(current_params["angle_rad"], SIN_TABLE_SCALED)

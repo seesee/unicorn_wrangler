@@ -3,10 +3,9 @@ import math
 import random
 import utime
 
-from animations.utils import hsv_to_rgb, fast_sin, fast_cos, SIN_TABLE, COS_TABLE
+from animations.utils import hsv_to_rgb, SIN_TABLE, COS_TABLE
 from uw.hardware import WIDTH, HEIGHT
 
-# --- Configurable Parameters ---
 CONFIG_CHANGE_INTERVAL_S = 20.0
 WIPE_DURATION_S = 1.5
 SCROLL_SPEED_X = 4.0
@@ -15,22 +14,18 @@ ZOOM_SPEED = 0.15
 ZOOM_MIN = 0.7
 ZOOM_MAX = 1.3
 
-# --- Fixed-Point Math Setup ---
 SCALE = 1024
-
 
 async def run(graphics, gu, state, interrupt_event):
     centre_x_scaled = int(((WIDTH - 1) / 2.0) * SCALE)
     centre_y_scaled = int(((HEIGHT - 1) / 2.0) * SCALE)
 
-    # Create scaled integer versions of sin/cos tables for rotation
     SIN_TABLE_SCALED = [int(s * SCALE) for s in SIN_TABLE]
     COS_TABLE_SCALED = [int(c * SCALE) for c in COS_TABLE]
 
     def get_scaled_trig(angle, table):
         angle %= (2 * math.pi)
         if angle < 0: angle += (2 * math.pi)
-        # Use the length of the original, unscaled table for indexing
         idx = int(angle / (2 * math.pi) * len(SIN_TABLE))
         return table[idx % len(table)]
 
@@ -41,12 +36,10 @@ async def run(graphics, gu, state, interrupt_event):
         r1, g1, b1 = hsv_to_rgb(h1, s1, v1)
         r2, g2, b2 = hsv_to_rgb(h2, s2, v2)
         return {
-            # Visual properties
             "pen1": graphics.create_pen(r1, g1, b1),
             "pen2": graphics.create_pen(r2, g2, b2),
             "checker_size": random.randint(4, 9),
             "rotation_speed": random.uniform(0.1, 0.5),
-            # Independent animation state
             "scroll_x_scaled": 0,
             "scroll_y_scaled": 0,
             "angle_rad": 0.0,
@@ -84,10 +77,10 @@ async def run(graphics, gu, state, interrupt_event):
                 graphics.set_pen(pen)
                 graphics.pixel(x, y)
 
-    # --- Main Loop Setup ---
     last_frame_time_ms = utime.ticks_ms()
     last_change_time_s = last_frame_time_ms / 1000.0
     in_transition = False
+    transition_start_time = 0.0
     zoom_phase_rad = 0.0
 
     current_params = create_random_params()
@@ -99,7 +92,6 @@ async def run(graphics, gu, state, interrupt_event):
         last_frame_time_ms = current_time_ms
         current_time_s = current_time_ms / 1000.0
 
-        # --- Update State ---
         zoom_phase_rad += ZOOM_SPEED * delta_t_s
         zoom_normalized = (math.sin(zoom_phase_rad) + 1.0) / 2.0
         current_zoom_scaled = int((ZOOM_MIN + (ZOOM_MAX - ZOOM_MIN) * zoom_normalized) * SCALE)
@@ -109,13 +101,11 @@ async def run(graphics, gu, state, interrupt_event):
         if in_transition and next_params:
             update_pattern_state(next_params, delta_t_s, current_zoom_scaled)
 
-        # --- Handle Transitions ---
         if not in_transition and current_time_s - last_change_time_s >= CONFIG_CHANGE_INTERVAL_S:
             in_transition = True
             transition_start_time = current_time_s
             next_params = create_random_params()
 
-        # --- Render Frame ---
         draw_pattern(current_params, 0, WIDTH, current_zoom_scaled)
 
         if in_transition and next_params:

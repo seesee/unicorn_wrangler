@@ -35,8 +35,6 @@ async def run(graphics, gu, state, interrupt_event):
 
         def _plan_path(self):
             points = []
-            x, y = self.current_x, self.current_y
-            # Ensure steps is an integer
             steps = int(max(10, abs(self.end_y - self.current_y)))
             if steps == 0: return []
 
