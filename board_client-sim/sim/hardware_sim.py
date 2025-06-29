@@ -39,7 +39,7 @@ class GraphicsSim:
     def measure_text(self, text, scale=1): return len(text) * 8 * scale
     def cleanup_text_cache(self): pass
     def text(self, text, x, y, wordwrap=-1, scale=1):
-        # Simple text rendering: just draw each char as a colored block
+        # Simple text rendering: just draw each char as a coloured block
         for i, char in enumerate(text):
             px = int(x + i * 8 * scale)
             py = int(y)
@@ -95,11 +95,11 @@ class GUISim:
                 r = int(r * self._brightness)
                 g = int(g * self._brightness)
                 b = int(b * self._brightness)
-                color = (r, g, b)
+                colour = (r, g, b)
                 rect = pygame.Rect(
                     x * PIXEL_SIZE, y * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE
                 )
-                pygame.draw.rect(self.screen, color, rect)
+                pygame.draw.rect(self.screen, colour, rect)
         pygame.display.flip()
         self.clock.tick(60)  # Limit to 60 FPS
     def clear_display(self):
@@ -116,4 +116,3 @@ gu = GUISim(graphics)
 
 def set_brightness(level):
     gu.set_brightness(level)
-

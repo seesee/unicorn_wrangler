@@ -39,16 +39,16 @@ class GraphicsWrapper:
         return (self.width, self.height)
     
     def create_pen(self, r, g, b):
-        """Create a pen with RGB values. Reuses existing pens for the same color."""
+        """Create a pen with RGB values. Reuses existing pens for the same colour."""
         r, g, b = int(r), int(g), int(b)
-        color_tuple = (r, g, b)
+        colour_tuple = (r, g, b)
         
-        if color_tuple in self.pens_cache:
-            return self.pens_cache[color_tuple]
+        if colour_tuple in self.pens_cache:
+            return self.pens_cache[colour_tuple]
         else:
             pen_id = self.next_pen_id
-            self.pens_cache[color_tuple] = pen_id
-            self.pen_id_to_rgb_cache[pen_id] = color_tuple
+            self.pens_cache[colour_tuple] = pen_id
+            self.pen_id_to_rgb_cache[pen_id] = colour_tuple
             self.next_pen_id += 1
             return pen_id
     
@@ -76,10 +76,10 @@ class GraphicsWrapper:
     def clear(self):
         """Clear the display buffer efficiently."""
         # Use the current_pen_tuple directly
-        fill_color = self.current_pen_tuple
+        fill_colour = self.current_pen_tuple
         for x_coord in range(self.width):
             for y_coord in range(self.height):
-                self.buffer[x_coord][y_coord] = fill_color
+                self.buffer[x_coord][y_coord] = fill_colour
     
     def line(self, x1, y1, x2, y2):
         """Draw a line using Bresenham's algorithm."""
@@ -180,16 +180,16 @@ class UnicornWrapper:
         
         for y in range(self.height):
             for x in range(self.width):
-                # current_pixel_color is an (r,g,b) tuple
-                current_pixel_color = current_buffer[x][y] 
+                # current_pixel_colour is an (r,g,b) tuple
+                current_pixel_colour = current_buffer[x][y] 
                 
-                if self._force_redraw_all or self._previous_frame_buffer[x][y] != current_pixel_color:
-                    r, g, b = current_pixel_color
+                if self._force_redraw_all or self._previous_frame_buffer[x][y] != current_pixel_colour:
+                    r, g, b = current_pixel_colour
                     # Unicorn HAT HD expects x to be flipped for normal orientation with USB at top
                     # Adjust if your physical orientation is different
                     physical_x = self.width - 1 - x 
                     unicornhathd.set_pixel(physical_x, y, r, g, b)
-                    self._previous_frame_buffer[x][y] = current_pixel_color
+                    self._previous_frame_buffer[x][y] = current_pixel_colour
                     changed_pixels += 1
         
         if changed_pixels > 0 or self._force_redraw_all:

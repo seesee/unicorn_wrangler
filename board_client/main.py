@@ -98,14 +98,14 @@ async def main():
     draw_startup_grid(graphics, gu, wifi_status, ntp_status, "off", "off")
     await uasyncio.sleep(0.1)
 
+    mqtt_service = None
     mqtt_status = "off"
     if config.get("mqtt", "enable", False):
         draw_startup_grid(graphics, gu, wifi_status, ntp_status, "connecting", "off")
         await uasyncio.sleep(0.1)
         mqtt_service = MQTTService()
         state.mqtt_service = mqtt_service
-        mqtt_ok = await mqtt_service.connect()
-        mqtt_status = "on" if mqtt_ok else "fail"
+        mqtt_status = "connecting"
     draw_startup_grid(graphics, gu, wifi_status, ntp_status, mqtt_status, "off")
     await uasyncio.sleep(0.1)
 
@@ -125,9 +125,7 @@ async def main():
         uasyncio.create_task(debug_monitor())
 
     # handle mqtt messages task
-    if config.get("mqtt", "enable", False):
-        mqtt_service = MQTTService()
-        state.mqtt_service = mqtt_service
+    if mqtt_service:
         uasyncio.create_task(mqtt_service.loop())
 
     # set animation sequence
@@ -183,4 +181,3 @@ if __name__ == "__main__":
             pass
         # try to reset/restart device 
         machine.reset()
-
