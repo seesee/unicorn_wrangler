@@ -9,11 +9,11 @@ from uw.hardware import WIDTH, HEIGHT, MODEL
 async def run(graphics, gu, state, interrupt_event):
     centre_x = WIDTH // 2
     centre_y = HEIGHT // 2
-    num_tendrils = 6 + WIDTH // 8
+    num_tendrils = 12 + WIDTH // 4
     min_radius = 1.0
 
     if MODEL == "galactic":
-        sphere_radius = HEIGHT // 2
+        sphere_radius = (WIDTH // 2) - 1
     else:
         sphere_radius = min(WIDTH, HEIGHT) // 2
 
@@ -28,31 +28,30 @@ async def run(graphics, gu, state, interrupt_event):
         graphics.set_pen(graphics.create_pen(0, 0, 0))
         graphics.clear()
 
-        # Fill the sphere with a dark grey-blue
         fill_r, fill_g, fill_b = 10, 15, 20
         graphics.set_pen(graphics.create_pen(fill_r, fill_g, fill_b))
-        for y in range(HEIGHT):
-            for x in range(WIDTH):
-                dist = math.sqrt((x - centre_x) ** 2 + (y - centre_y) ** 2)
-                if dist <= sphere_radius:
-                    graphics.pixel(x, y)
+        graphics.clear()
 
-        # Draw the glass boundary
-        glass_r, glass_g, glass_b = 30, 40, 50  # Dim blue-grey
+        glass_r, glass_g, glass_b = 30, 40, 50
         graphics.set_pen(graphics.create_pen(glass_r, glass_g, glass_b))
-        for angle_deg in range(0, 360, 2):
-            angle_rad = math.radians(angle_deg)
-            x = int(centre_x + math.cos(angle_rad) * (sphere_radius -1))
-            y = int(centre_y + math.sin(angle_rad) * (sphere_radius-1))
-            if 0 <= x < WIDTH and 0 <= y < HEIGHT:
-                graphics.pixel(x, y)
+        for y in range(HEIGHT):
+            dist_y = y - centre_y
+            if abs(dist_y) < sphere_radius:
+                dist_x_sq = sphere_radius**2 - dist_y**2
+                if dist_x_sq > 0:
+                    dist_x = math.sqrt(dist_x_sq)
+                    lx = int(centre_x - dist_x)
+                    if 0 <= lx < WIDTH:
+                        graphics.pixel(lx, y)
+                    rx = int(centre_x + dist_x)
+                    if 0 <= rx < WIDTH:
+                        graphics.pixel(rx, y)
 
-        def draw_pixel_in_sphere(x, y, r, g, b):
-            dist = math.sqrt((x - centre_x) ** 2 + (y - centre_y) ** 2)
-            if dist <= sphere_radius:
-                fade_factor = 1.0 - (dist / sphere_radius)
+        def draw_pixel_in_viewport(x, y, r, g, b):
+            if 0 <= x < WIDTH and 0 <= y < HEIGHT:
+                dist_from_centre = math.sqrt((x - centre_x) ** 2 + (y - centre_y) ** 2)
+                fade_factor = 1.0 - (dist_from_centre / sphere_radius)
                 fade_factor = max(0.0, min(1.0, fade_factor ** 1.5))
-                # Combine with background
                 final_r = int(fill_r + (r - fill_r) * fade_factor)
                 final_g = int(fill_g + (g - fill_g) * fade_factor)
                 final_b = int(fill_b + (b - fill_b) * fade_factor)
@@ -61,7 +60,7 @@ async def run(graphics, gu, state, interrupt_event):
 
         hue = 0.9 + (fast_sin(t * 0.5) * 0.05)
         rr, gg, bb = hsv_to_rgb(hue, 0.7, 1.0)
-        draw_pixel_in_sphere(centre_x, centre_y, rr, gg, bb)
+        draw_pixel_in_viewport(centre_x, centre_y, rr, gg, bb)
 
         for i in range(num_tendrils):
             phase = t * (0.7 + 0.2 * i) + tendril_phase[i]
@@ -79,6 +78,9 @@ async def run(graphics, gu, state, interrupt_event):
                 px = int(centre_x + math.cos(angle) * seg)
                 py = int(centre_y + math.sin(angle) * seg)
 
+                if not (0 <= py < HEIGHT):
+                    continue
+
                 if random.random() < 0.07 * frac:
                     continue
 
@@ -87,9 +89,7 @@ async def run(graphics, gu, state, interrupt_event):
                 hue = 0.9 + (fast_sin(t + i) * 0.05)
                 saturation = max(0.0, min(1.0, frac * 1.2))
                 r, g, b = hsv_to_rgb(hue, saturation, fade)
-
-                if 0 <= px < WIDTH and 0 <= py < HEIGHT:
-                    draw_pixel_in_sphere(px, py, r, g, b)
+                draw_pixel_in_viewport(px, py, r, g, b)
 
             tip_angle = base_angle + fast_sin(phase + i) * 0.2
             tip_len = length + fast_sin(phase * 1.2 + i) * 1.2
@@ -97,21 +97,27 @@ async def run(graphics, gu, state, interrupt_event):
             tip_y = int(centre_y + math.sin(tip_angle) * tip_len)
 
             dist_to_tip = math.sqrt((tip_x - centre_x) ** 2 + (tip_y - centre_y) ** 2)
+
             if dist_to_tip >= sphere_radius - 1:
-                impact_angle = math.atan2(tip_y - centre_y, tip_x - centre_x)
                 spark_hue = 0.8  # Purple
-
-                for d_angle in range(-4, 5):
-                    angle = impact_angle + math.radians(d_angle * 2)
-                    brightness = max(0.5, 1.0 - (abs(d_angle) / 5.0))
+                for dy in range(-2, 3):
+                    brightness = max(0.5, 1.0 - (abs(dy) / 3.0))
                     r, g, b = hsv_to_rgb(spark_hue, 1.0, brightness)
+                    py = tip_y + dy
 
-                    px = int(centre_x + math.cos(angle) * (sphere_radius - 1))
-                    py = int(centre_y + math.sin(angle) * (sphere_radius - 1))
+                    dist_y = py - centre_y
+                    if abs(dist_y) < sphere_radius:
+                        dist_x_sq = sphere_radius**2 - dist_y**2
+                        if dist_x_sq > 0:
+                            dist_x = math.sqrt(dist_x_sq)
+                            if tip_x > centre_x:
+                                px = int(centre_x + dist_x -1)
+                            else:
+                                px = int(centre_x - dist_x)
 
-                    if 0 <= px < WIDTH and 0 <= py < HEIGHT:
-                        graphics.set_pen(graphics.create_pen(r, g, b))
-                        graphics.pixel(px, py)
+                            if 0 <= px < WIDTH and 0 <= py < HEIGHT:
+                                graphics.set_pen(graphics.create_pen(r, g, b))
+                                graphics.pixel(px, py)
 
         gu.update(graphics)
         t += 0.045
