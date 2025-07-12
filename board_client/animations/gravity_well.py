@@ -22,6 +22,9 @@ async def run(graphics, gu, state, interrupt_event):
     # Destruction flash parameters
     DESTRUCTION_FLASH_DURATION = 5  # Number of frames the white flash lasts
 
+    # Particle dynamics parameters
+    EVAPORATION_RATE = 0.0005  # Rate at which particles lose mass per frame
+
     class Particle:
         def __init__(self):
             self.history = deque((), TRAIL_LENGTH)
@@ -49,9 +52,15 @@ async def run(graphics, gu, state, interrupt_event):
 
         def update(self, gravity_strength):
             """
-            Update particle position based on gravity.
+            Update particle position based on gravity and handle mass evaporation.
             Returns (True, x, y) if a collision with the planet occurred, (False, None, None) otherwise.
             """
+            # Mass evaporation
+            self.mass -= EVAPORATION_RATE
+            if self.mass < MIN_MASS:
+                self.reset()
+                return False, None, None  # Particle reset, no collision with planet
+
             dx = CENTER_X - self.x
             dy = CENTER_Y - self.y
             dist_sq = dx * dx + dy * dy
