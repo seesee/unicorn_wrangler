@@ -33,6 +33,6 @@ async def wifi_monitor():
             state.wifi_connected = False
             try:
                 await connect_wifi()
-            except RunTimeError:
+            except RuntimeError:
                 pass
         await uasyncio.sleep(10)
