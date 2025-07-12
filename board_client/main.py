@@ -8,7 +8,7 @@ from uw.state import state
 from uw.animation_service import run_random_animation, run_named_animation, get_animation_list
 from uw.background_tasks import button_monitor, debug_monitor
 from uw.transitions import melt_off, countdown
-from uw.service_manager import initialize_services
+from uw.service_manager import initialise_services
 
 # conveyer belt
 def rotate_sequence(seq):
@@ -33,7 +33,7 @@ async def main():
     setup_logging(config.get("general", "debug", False))
     set_brightness(config.get("general", "brightness", 0.75))
 
-    await initialize_services()
+    await initialise_services()
 
     # button monitoring task
     uasyncio.create_task(button_monitor())

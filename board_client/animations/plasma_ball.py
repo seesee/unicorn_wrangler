@@ -5,7 +5,6 @@ import random
 from animations.utils import hsv_to_rgb, fast_sin, fast_cos
 from uw.hardware import WIDTH, HEIGHT, MODEL
 
-
 async def run(graphics, gu, state, interrupt_event):
     centre_x = WIDTH // 2
     centre_y = HEIGHT // 2
@@ -21,7 +20,6 @@ async def run(graphics, gu, state, interrupt_event):
 
     tendril_phase = [random.uniform(0, 2 * math.pi) for _ in range(num_tendrils)]
     tendril_target = [random.uniform(0, 2 * math.pi) for _ in range(num_tendrils)]
-    tendril_branch = [random.random() for _ in range(num_tendrils)]
 
     t = 0.0
     while not interrupt_event.is_set():
@@ -122,7 +120,7 @@ async def run(graphics, gu, state, interrupt_event):
                         if dist_x_sq > 0:
                             dist_x = math.sqrt(dist_x_sq)
                             if tip_x > centre_x:
-                                px = int(centre_x + dist_x -1)
+                                px = int(centre_x + dist_x - 1)
                             else:
                                 px = int(centre_x - dist_x)
 

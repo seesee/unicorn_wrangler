@@ -64,17 +64,23 @@ async def _retry_service(service_name, connect_func, *args):
     retry_interval = config.get(service_name, "retry_interval_s", 45)
     while True:
         log(f"Retrying {service_name} connection...", "INFO")
-        if await connect_func(*args):
-            service_status[service_name] = STATUS_ON
-            log(f"{service_name} connected successfully.", "INFO")
-            if service_name == "ntp":
-                 uasyncio.create_task(periodic_ntp_sync())
-            break
-        else:
-            log(f"{service_name} connection failed. Retrying in {retry_interval}s.", "WARN")
+        try:
+            result = await connect_func(*args)
+            # Handle both True return and successful completion without exception
+            if result is None or result:
+                service_status[service_name] = STATUS_ON
+                log(f"{service_name} connected successfully.", "INFO")
+                if service_name == "ntp":
+                    uasyncio.create_task(periodic_ntp_sync())
+                break
+            else:
+                log(f"{service_name} connection failed. Retrying in {retry_interval}s.", "WARN")
+                await uasyncio.sleep(retry_interval)
+        except Exception as e:
+            log(f"{service_name} connection failed: {e}. Retrying in {retry_interval}s.", "WARN")
             await uasyncio.sleep(retry_interval)
 
-async def initialize_services():
+async def initialise_services():
     # Clear the screen initially
     graphics.set_pen(graphics.create_pen(0, 0, 0))
     graphics.clear()
