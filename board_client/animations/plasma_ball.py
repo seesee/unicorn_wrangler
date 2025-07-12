@@ -5,24 +5,22 @@ import random
 from animations.utils import hsv_to_rgb, fast_sin, fast_cos
 from uw.hardware import WIDTH, HEIGHT, MODEL
 
+
 async def run(graphics, gu, state, interrupt_event):
     centre_x = WIDTH // 2
     centre_y = HEIGHT // 2
     num_tendrils = 6 + WIDTH // 8
-    min_radius = 1.0  # Smallest possible centre
+    min_radius = 1.0
 
-    # For galactic, let tendrils reach the furthest edge
     if MODEL == "galactic":
-        # Distance from centre to furthest corner
-        max_radius = math.sqrt((max(centre_x, WIDTH - centre_x - 1))**2 +
-                               (max(centre_y, HEIGHT - centre_y - 1))**2)
+        sphere_radius = HEIGHT // 2
     else:
-        max_radius = min(WIDTH, HEIGHT) * 0.48
+        sphere_radius = min(WIDTH, HEIGHT) // 2
 
-    hue_base = random.random()
+    max_tendril_radius = sphere_radius * 0.95
 
-    tendril_phase = [random.uniform(0, 2*math.pi) for _ in range(num_tendrils)]
-    tendril_target = [random.uniform(0, 2*math.pi) for _ in range(num_tendrils)]
+    tendril_phase = [random.uniform(0, 2 * math.pi) for _ in range(num_tendrils)]
+    tendril_target = [random.uniform(0, 2 * math.pi) for _ in range(num_tendrils)]
     tendril_branch = [random.random() for _ in range(num_tendrils)]
 
     t = 0.0
@@ -30,31 +28,51 @@ async def run(graphics, gu, state, interrupt_event):
         graphics.set_pen(graphics.create_pen(0, 0, 0))
         graphics.clear()
 
-        # Minimal glowing centre: just a single pixel (or a tiny cross)
+        # Fill the sphere with a dark grey-blue
+        fill_r, fill_g, fill_b = 10, 15, 20
+        graphics.set_pen(graphics.create_pen(fill_r, fill_g, fill_b))
+        for y in range(HEIGHT):
+            for x in range(WIDTH):
+                dist = math.sqrt((x - centre_x) ** 2 + (y - centre_y) ** 2)
+                if dist <= sphere_radius:
+                    graphics.pixel(x, y)
+
+        # Draw the glass boundary
+        glass_r, glass_g, glass_b = 30, 40, 50  # Dim blue-grey
+        graphics.set_pen(graphics.create_pen(glass_r, glass_g, glass_b))
+        for angle_deg in range(0, 360, 2):
+            angle_rad = math.radians(angle_deg)
+            x = int(centre_x + math.cos(angle_rad) * (sphere_radius -1))
+            y = int(centre_y + math.sin(angle_rad) * (sphere_radius-1))
+            if 0 <= x < WIDTH and 0 <= y < HEIGHT:
+                graphics.pixel(x, y)
+
+        def draw_pixel_in_sphere(x, y, r, g, b):
+            dist = math.sqrt((x - centre_x) ** 2 + (y - centre_y) ** 2)
+            if dist <= sphere_radius:
+                fade_factor = 1.0 - (dist / sphere_radius)
+                fade_factor = max(0.0, min(1.0, fade_factor ** 1.5))
+                # Combine with background
+                final_r = int(fill_r + (r - fill_r) * fade_factor)
+                final_g = int(fill_g + (g - fill_g) * fade_factor)
+                final_b = int(fill_b + (b - fill_b) * fade_factor)
+                graphics.set_pen(graphics.create_pen(final_r, final_g, final_b))
+                graphics.pixel(x, y)
+
         hue = 0.9 + (fast_sin(t * 0.5) * 0.05)
         rr, gg, bb = hsv_to_rgb(hue, 0.7, 1.0)
-        graphics.set_pen(graphics.create_pen(rr, gg, bb))
-        graphics.pixel(centre_x, centre_y)
-        for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
-            if 0 <= centre_x + dx < WIDTH and 0 <= centre_y + dy < HEIGHT:
-                graphics.set_pen(graphics.create_pen(int(rr * 0.5), int(gg * 0.5), int(bb * 0.5)))
-                graphics.pixel(centre_x + dx, centre_y + dy)
+        draw_pixel_in_sphere(centre_x, centre_y, rr, gg, bb)
 
-        # Animate tendrils
         for i in range(num_tendrils):
             phase = t * (0.7 + 0.2 * i) + tendril_phase[i]
             tendril_target[i] += (random.random() - 0.5) * 0.03
             base_angle = tendril_target[i] + fast_sin(phase) * 0.25
 
-            # The tendril "grows" and "retracts" with a pulse
             pulse = 0.7 + 0.3 * fast_sin(phase * 0.7 + i)
-            length = min_radius + (max_radius - min_radius) * pulse
-
-            branch = tendril_branch[i] > 0.7
-            branch_angle = base_angle + (0.18 if branch else 0)
+            length = min_radius + (max_tendril_radius - min_radius) * pulse
 
             for seg in range(int(min_radius), int(length)):
-                frac = (seg - min_radius) / (max_radius - min_radius)
+                frac = (seg - min_radius) / (max_tendril_radius - min_radius)
                 wiggle = fast_sin(phase + frac * 7 + i) * (0.18 + 0.18 * frac)
                 angle = base_angle + wiggle
 
@@ -64,35 +82,36 @@ async def run(graphics, gu, state, interrupt_event):
                 if random.random() < 0.07 * frac:
                     continue
 
-                # White/pink plasma colour scheme
                 fade = 1.0 - frac * 0.85
                 fade = max(0.0, min(1.0, fade))
                 hue = 0.9 + (fast_sin(t + i) * 0.05)
                 saturation = max(0.0, min(1.0, frac * 1.2))
                 r, g, b = hsv_to_rgb(hue, saturation, fade)
 
-                graphics.set_pen(graphics.create_pen(int(r), int(g), int(b)))
                 if 0 <= px < WIDTH and 0 <= py < HEIGHT:
-                    graphics.pixel(px, py)
+                    draw_pixel_in_sphere(px, py, r, g, b)
 
-                # Draw a branch if enabled
-                if branch and frac > 0.5:
-                    branch_px = int(centre_x + math.cos(branch_angle + wiggle * 0.7) * seg)
-                    branch_py = int(centre_y + math.sin(branch_angle + wiggle * 0.7) * seg)
-                    if 0 <= branch_px < WIDTH and 0 <= branch_py < HEIGHT:
-                        graphics.set_pen(graphics.create_pen(int(r * 0.7), int(g * 0.7), int(b * 0.7)))
-                        graphics.pixel(branch_px, branch_py)
-
-            # Optionally, a bright "spark" at the tip
             tip_angle = base_angle + fast_sin(phase + i) * 0.2
             tip_len = length + fast_sin(phase * 1.2 + i) * 1.2
             tip_x = int(centre_x + math.cos(tip_angle) * tip_len)
             tip_y = int(centre_y + math.sin(tip_angle) * tip_len)
-            if 0 <= tip_x < WIDTH and 0 <= tip_y < HEIGHT:
-                hue = 0.9 + (fast_sin(t + i) * 0.05)
-                r, g, b = hsv_to_rgb(hue, 0.4, 1.0)
-                graphics.set_pen(graphics.create_pen(r, g, b))
-                graphics.pixel(tip_x, tip_y)
+
+            dist_to_tip = math.sqrt((tip_x - centre_x) ** 2 + (tip_y - centre_y) ** 2)
+            if dist_to_tip >= sphere_radius - 1:
+                impact_angle = math.atan2(tip_y - centre_y, tip_x - centre_x)
+                spark_hue = 0.8  # Purple
+
+                for d_angle in range(-4, 5):
+                    angle = impact_angle + math.radians(d_angle * 2)
+                    brightness = max(0.5, 1.0 - (abs(d_angle) / 5.0))
+                    r, g, b = hsv_to_rgb(spark_hue, 1.0, brightness)
+
+                    px = int(centre_x + math.cos(angle) * (sphere_radius - 1))
+                    py = int(centre_y + math.sin(angle) * (sphere_radius - 1))
+
+                    if 0 <= px < WIDTH and 0 <= py < HEIGHT:
+                        graphics.set_pen(graphics.create_pen(r, g, b))
+                        graphics.pixel(px, py)
 
         gu.update(graphics)
         t += 0.045
