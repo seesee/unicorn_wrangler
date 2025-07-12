@@ -25,11 +25,14 @@ async def connect_wifi():
         await uasyncio.sleep(0.5)
     state.wifi_connected = False
     log("WiFi connection failed.", "ERROR")
-    return False
+    raise RuntimeError("WiFi connection failed")
 
 async def wifi_monitor():
     while True:
         if not wlan.isconnected():
             state.wifi_connected = False
-            await connect_wifi()
+            try:
+                await connect_wifi()
+            except RuntimeError:
+                pass
         await uasyncio.sleep(10)
