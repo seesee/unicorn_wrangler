@@ -29,37 +29,48 @@ async def run(graphics, gu, state, interrupt_event):
         graphics.clear()
 
         fill_r, fill_g, fill_b = 10, 15, 20
-        graphics.set_pen(graphics.create_pen(fill_r, fill_g, fill_b))
-        graphics.clear()
-
         glass_r, glass_g, glass_b = 30, 40, 50
-        graphics.set_pen(graphics.create_pen(glass_r, glass_g, glass_b))
-        for y in range(HEIGHT):
-            dist_y = y - centre_y
-            if abs(dist_y) < sphere_radius:
-                dist_x_sq = sphere_radius**2 - dist_y**2
-                if dist_x_sq > 0:
-                    dist_x = math.sqrt(dist_x_sq)
-                    lx = int(centre_x - dist_x)
-                    if 0 <= lx < WIDTH:
-                        graphics.pixel(lx, y)
-                    rx = int(centre_x + dist_x)
-                    if 0 <= rx < WIDTH:
-                        graphics.pixel(rx, y)
+
+        if MODEL == "galactic":
+            graphics.set_pen(graphics.create_pen(fill_r, fill_g, fill_b))
+            graphics.clear()
+            graphics.set_pen(graphics.create_pen(glass_r, glass_g, glass_b))
+            edge_x = WIDTH - 1
+            for y in range(3):
+                graphics.pixel(1, y)
+                graphics.pixel(edge_x - 1, y)
+            for y in range(3, HEIGHT - 3):
+                graphics.pixel(0, y)
+                graphics.pixel(edge_x, y)
+            for y in range(HEIGHT - 3, HEIGHT):
+                graphics.pixel(1, y)
+                graphics.pixel(edge_x - 1, y)
+        else:
+            # Draw filled circle for non-galactic models
+            for y in range(HEIGHT):
+                for x in range(WIDTH):
+                    dist = math.sqrt((x - centre_x)**2 + (y - centre_y)**2)
+                    if dist <= sphere_radius:
+                        if sphere_radius - dist < 1:
+                            graphics.set_pen(graphics.create_pen(glass_r, glass_g, glass_b))
+                        else:
+                            graphics.set_pen(graphics.create_pen(fill_r, fill_g, fill_b))
+                        graphics.pixel(x, y)
 
         def draw_pixel_in_viewport(x, y, r, g, b):
             if 0 <= x < WIDTH and 0 <= y < HEIGHT:
                 dist_from_centre = math.sqrt((x - centre_x) ** 2 + (y - centre_y) ** 2)
-                fade_factor = 1.0 - (dist_from_centre / sphere_radius)
-                fade_factor = max(0.0, min(1.0, fade_factor ** 1.5))
-                final_r = int(fill_r + (r - fill_r) * fade_factor)
-                final_g = int(fill_g + (g - fill_g) * fade_factor)
-                final_b = int(fill_b + (b - fill_b) * fade_factor)
-                graphics.set_pen(graphics.create_pen(final_r, final_g, final_b))
-                graphics.pixel(x, y)
+                if dist_from_centre < sphere_radius:
+                    fade_factor = 1.0 - (dist_from_centre / sphere_radius)
+                    fade_factor = max(0.0, min(1.0, fade_factor ** 1.5))
+                    final_r = int(fill_r + (r - fill_r) * fade_factor)
+                    final_g = int(fill_g + (g - fill_g) * fade_factor)
+                    final_b = int(fill_b + (b - fill_b) * fade_factor)
+                    graphics.set_pen(graphics.create_pen(final_r, final_g, final_b))
+                    graphics.pixel(x, y)
 
-        hue = 0.9 + (fast_sin(t * 0.5) * 0.05)
-        rr, gg, bb = hsv_to_rgb(hue, 0.7, 1.0)
+        hue = 0.95 + (fast_sin(t * 0.5) * 0.05)
+        rr, gg, bb = hsv_to_rgb(hue, 0.8, 1.0)
         draw_pixel_in_viewport(centre_x, centre_y, rr, gg, bb)
 
         for i in range(num_tendrils):
@@ -84,10 +95,10 @@ async def run(graphics, gu, state, interrupt_event):
                 if random.random() < 0.07 * frac:
                     continue
 
-                fade = 1.0 - frac * 0.85
+                fade = 1.0 - frac * 0.8
                 fade = max(0.0, min(1.0, fade))
-                hue = 0.9 + (fast_sin(t + i) * 0.05)
-                saturation = max(0.0, min(1.0, frac * 1.2))
+                hue = 0.95 + (fast_sin(t + i) * 0.05)
+                saturation = max(0.0, min(1.0, frac * 1.5))
                 r, g, b = hsv_to_rgb(hue, saturation, fade)
                 draw_pixel_in_viewport(px, py, r, g, b)
 
