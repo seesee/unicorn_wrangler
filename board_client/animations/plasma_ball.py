@@ -31,14 +31,14 @@ async def run(graphics, gu, state, interrupt_event):
         graphics.clear()
 
         # Minimal glowing centre: just a single pixel (or a tiny cross)
-        hue = (hue_base + t * 0.12) % 1.0
+        hue = 0.9 + (fast_sin(t * 0.5) * 0.05)
         rr, gg, bb = hsv_to_rgb(hue, 0.7, 1.0)
         graphics.set_pen(graphics.create_pen(rr, gg, bb))
         graphics.pixel(centre_x, centre_y)
-        for dx, dy in [(-1,0), (1,0), (0,-1), (0,1)]:
-            if 0 <= centre_x+dx < WIDTH and 0 <= centre_y+dy < HEIGHT:
-                graphics.set_pen(graphics.create_pen(int(rr*0.5), int(gg*0.5), int(bb*0.5)))
-                graphics.pixel(centre_x+dx, centre_y+dy)
+        for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+            if 0 <= centre_x + dx < WIDTH and 0 <= centre_y + dy < HEIGHT:
+                graphics.set_pen(graphics.create_pen(int(rr * 0.5), int(gg * 0.5), int(bb * 0.5)))
+                graphics.pixel(centre_x + dx, centre_y + dy)
 
         # Animate tendrils
         for i in range(num_tendrils):
@@ -64,10 +64,13 @@ async def run(graphics, gu, state, interrupt_event):
                 if random.random() < 0.07 * frac:
                     continue
 
+                # White/pink plasma colour scheme
                 fade = 1.0 - frac * 0.85
                 fade = max(0.0, min(1.0, fade))
-                hue = (hue_base + i / num_tendrils + t * 0.07 + frac * 0.2) % 1.0
-                r, g, b = hsv_to_rgb(hue, 1.0, fade)
+                hue = 0.9 + (fast_sin(t + i) * 0.05)
+                saturation = max(0.0, min(1.0, frac * 1.2))
+                r, g, b = hsv_to_rgb(hue, saturation, fade)
+
                 graphics.set_pen(graphics.create_pen(int(r), int(g), int(b)))
                 if 0 <= px < WIDTH and 0 <= py < HEIGHT:
                     graphics.pixel(px, py)
@@ -77,7 +80,7 @@ async def run(graphics, gu, state, interrupt_event):
                     branch_px = int(centre_x + math.cos(branch_angle + wiggle * 0.7) * seg)
                     branch_py = int(centre_y + math.sin(branch_angle + wiggle * 0.7) * seg)
                     if 0 <= branch_px < WIDTH and 0 <= branch_py < HEIGHT:
-                        graphics.set_pen(graphics.create_pen(int(r*0.7), int(g*0.7), int(b*0.7)))
+                        graphics.set_pen(graphics.create_pen(int(r * 0.7), int(g * 0.7), int(b * 0.7)))
                         graphics.pixel(branch_px, branch_py)
 
             # Optionally, a bright "spark" at the tip
@@ -86,7 +89,8 @@ async def run(graphics, gu, state, interrupt_event):
             tip_x = int(centre_x + math.cos(tip_angle) * tip_len)
             tip_y = int(centre_y + math.sin(tip_angle) * tip_len)
             if 0 <= tip_x < WIDTH and 0 <= tip_y < HEIGHT:
-                r, g, b = hsv_to_rgb((hue_base + i / num_tendrils + t * 0.1) % 1.0, 1.0, 1.0)
+                hue = 0.9 + (fast_sin(t + i) * 0.05)
+                r, g, b = hsv_to_rgb(hue, 0.4, 1.0)
                 graphics.set_pen(graphics.create_pen(r, g, b))
                 graphics.pixel(tip_x, tip_y)
 
