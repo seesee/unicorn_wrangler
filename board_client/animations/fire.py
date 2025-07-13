@@ -23,15 +23,15 @@ async def run(graphics, gu, state, interrupt_event):
 
     heat = [[0.0 for _ in range(height)] for _ in range(width)]
 
-    # Adjust for small displays
-    if MODEL in ("stellar", "uhd") or (WIDTH == 16 and HEIGHT == 16):
-        fire_spawns = 3  # fewer spawns
-        spawn_rows = [height - 1]  # only bottom row
+    # Adjust for display size
+    if MODEL in ("stellar", "uhd") or (WIDTH <= 16):
+        fire_spawns = 3
+        damping_factor = 0.95  # Faster falloff for smaller displays
     else:
         fire_spawns = 5
-        spawn_rows = [height - 1, height - 2] 
+        damping_factor = 0.97
 
-    damping_factor = 0.97
+    spawn_rows = [height - 1, height - 2]
 
     while not interrupt_event.is_set():
         for x in range(width):
