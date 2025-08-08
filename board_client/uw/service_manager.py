@@ -6,6 +6,7 @@ from uw.state import state
 from uw.wifi_service import connect_wifi
 from uw.time_service import set_rtc_from_ntp, periodic_ntp_sync
 from uw.mqtt_service import MQTTService
+import time
 
 # Service status constants
 STATUS_OFF = "off"
@@ -21,6 +22,10 @@ service_status = {
     "mqtt": STATUS_OFF,
     "streaming": STATUS_OFF,
 }
+
+# Track startup phase to prevent grid updates during normal operation
+startup_complete = False
+mqtt_connection_attempted = False
 
 def draw_startup_grid():
     WIDTH, HEIGHT = graphics.get_bounds()
@@ -61,6 +66,7 @@ def draw_startup_grid():
     gu.update(graphics)
 
 async def _retry_service(service_name, connect_func, *args):
+    global startup_complete
     retry_interval = config.get(service_name, "retry_interval_s", 45)
     while True:
         log(f"Retrying {service_name} connection...", "INFO")
@@ -72,6 +78,9 @@ async def _retry_service(service_name, connect_func, *args):
                 log(f"{service_name} connected successfully.", "INFO")
                 if service_name == "ntp":
                     uasyncio.create_task(periodic_ntp_sync())
+                # Only update grid during startup phase
+                if not startup_complete:
+                    draw_startup_grid()
                 break
             else:
                 log(f"{service_name} connection failed. Retrying in {retry_interval}s.", "WARN")
@@ -81,6 +90,10 @@ async def _retry_service(service_name, connect_func, *args):
             await uasyncio.sleep(retry_interval)
 
 async def initialise_services():
+    global startup_complete
+    startup_complete = False
+    start_time = time.ticks_ms()
+    
     # Clear the screen initially
     graphics.set_pen(graphics.create_pen(0, 0, 0))
     graphics.clear()
@@ -96,101 +109,237 @@ async def initialise_services():
         service_status["streaming"] = STATUS_ENABLED
     
     draw_startup_grid()
-    await uasyncio.sleep(1) # Show initial state
+    await uasyncio.sleep_ms(300)  # Brief initial display
 
-    # --- WiFi ---
+    # --- WiFi with timeout ---
+    wifi_success = False
     if config.get("wifi", "enable", False):
         service_status["wifi"] = STATUS_CONNECTING
         draw_startup_grid()
-        if await connect_wifi():
+        
+        try:
+            # Give WiFi maximum 1.5 seconds during startup
+            wifi_task = uasyncio.create_task(connect_wifi())
+            wifi_success = await uasyncio.wait_for(wifi_task, 1.5)
             service_status["wifi"] = STATUS_ON
             state.wifi_connected = True
-        else:
+            log("WiFi connected during startup phase", "INFO")
+        except uasyncio.TimeoutError:
+            log("WiFi connection timeout during startup, moving to background", "INFO")
             service_status["wifi"] = STATUS_FAIL
-            uasyncio.create_task(_retry_service("wifi", connect_wifi))
-        draw_startup_grid()
-
-    # --- NTP ---
-    if config.get("general", "ntp_enable", True):
-        if state.wifi_connected:
-            service_status["ntp"] = STATUS_CONNECTING
-            draw_startup_grid()
-            if set_rtc_from_ntp(config.get("general", "ntp_host", "pool.ntp.org")):
-                service_status["ntp"] = STATUS_ON
-                uasyncio.create_task(periodic_ntp_sync())
-            else:
-                service_status["ntp"] = STATUS_FAIL
-
-                async def ntp_retry_wrapper():
-                    # This wrapper makes the synchronous function compatible
-                    # with the async retry mechanism.
-                    host = config.get("general", "ntp_host", "pool.ntp.org")
-                    return set_rtc_from_ntp(host)
-
-                uasyncio.create_task(_retry_service("ntp", ntp_retry_wrapper))
-        else:
-            service_status["ntp"] = STATUS_OFF # No wifi, so can't even try
-        draw_startup_grid()
-
-    # --- MQTT ---
-    if config.get("mqtt", "enable", False):
-        if state.wifi_connected:
-            service_status["mqtt"] = STATUS_CONNECTING
-            draw_startup_grid()
-            mqtt_service = MQTTService()
-            state.mqtt_service = mqtt_service
-            uasyncio.create_task(mqtt_service.loop())
+            # Start background WiFi connection
+            uasyncio.create_task(_background_wifi_connect())
+        except Exception as e:
+            log(f"WiFi connection failed during startup: {e}", "ERROR")
+            service_status["wifi"] = STATUS_FAIL
+            uasyncio.create_task(_background_wifi_connect())
             
-            # Wait for connection with a timeout
-            connected = False
-            for _ in range(15):
-                if mqtt_service.connected:
-                    connected = True
-                    break
-                await uasyncio.sleep(1)
-
-            if connected:
-                service_status["mqtt"] = STATUS_ON
-            else:
-                service_status["mqtt"] = STATUS_FAIL
-                # MQTTService handles its own retries, so we don't use _retry_service here
-        else:
-            service_status["mqtt"] = STATUS_OFF
         draw_startup_grid()
+        await uasyncio.sleep_ms(200)  # Show WiFi result
 
-    # --- Streaming ---
+    # --- Quick service attempts during startup phase ---
+    services_to_start = []
+    
+    # Start all enabled services with startup attempts
+    if config.get("general", "ntp_enable", True):
+        services_to_start.append(_startup_ntp_sync())
+    
+    if config.get("mqtt", "enable", False):
+        services_to_start.append(_startup_mqtt_connect())
+    
     if config.get("streaming", "enable", False):
-        if state.wifi_connected:
-            service_status["streaming"] = STATUS_CONNECTING
-            draw_startup_grid()
-            host = config.get("streaming", "host", "127.0.0.1")
-            port = config.get("streaming", "port", 8000)
-            try:
-                # Simple check to see if we can open a connection
-                reader, writer = await uasyncio.open_connection(host, port)
-                writer.close()
-                await writer.wait_closed()
-                service_status["streaming"] = STATUS_ON
-            except OSError:
-                service_status["streaming"] = STATUS_FAIL
-                # We can create a simple lambda to pass to the retry service
-                async def check_streaming():
-                    try:
-                        reader, writer = await uasyncio.open_connection(host, port)
-                        writer.close()
-                        await writer.wait_closed()
-                        return True
-                    except OSError:
-                        return False
-                uasyncio.create_task(_retry_service("streaming", check_streaming))
-        else:
-            service_status["streaming"] = STATUS_OFF
+        services_to_start.append(_startup_streaming_connect())
+    
+    # Run all service startup attempts concurrently
+    if services_to_start:
+        await uasyncio.gather(*services_to_start, return_exceptions=True)
         draw_startup_grid()
 
-    # Short delay to show the final grid status
-    await uasyncio.sleep(2)
+    # Show final startup grid for remaining time
+    elapsed = time.ticks_diff(time.ticks_ms(), start_time)
+    remaining = max(0, 3000 - elapsed)
+    if remaining > 0:
+        await uasyncio.sleep_ms(remaining)
+    
+    startup_complete = True
     
     # Clear the screen and proceed to animations
     graphics.set_pen(graphics.create_pen(0, 0, 0))
     graphics.clear()
     gu.update(graphics)
+
+async def _background_wifi_connect():
+    """Background WiFi connection with retries"""
+    while not state.wifi_connected:
+        try:
+            if await connect_wifi():
+                service_status["wifi"] = STATUS_ON
+                state.wifi_connected = True
+                log("WiFi connected in background", "INFO")
+                break
+        except Exception as e:
+            log(f"Background WiFi connection failed: {e}", "WARN")
+            
+        service_status["wifi"] = STATUS_FAIL
+        await uasyncio.sleep(45)  # Retry every 45 seconds
+
+async def _startup_ntp_sync():
+    """NTP sync attempt during startup phase"""
+    if not state.wifi_connected:
+        service_status["ntp"] = STATUS_OFF
+        return
+    
+    service_status["ntp"] = STATUS_CONNECTING
+    draw_startup_grid()
+    
+    # Small delay to let network stack settle after WiFi connection
+    await uasyncio.sleep_ms(200)
+    
+    try:
+        if set_rtc_from_ntp(config.get("general", "ntp_host", "pool.ntp.org")):
+            service_status["ntp"] = STATUS_ON
+            uasyncio.create_task(periodic_ntp_sync())
+            log("NTP sync successful during startup", "INFO")
+        else:
+            service_status["ntp"] = STATUS_FAIL
+            log("NTP sync failed during startup", "WARN")
+            # Start background retry
+            uasyncio.create_task(_background_ntp_sync())
+    except Exception as e:
+        service_status["ntp"] = STATUS_FAIL
+        log(f"NTP sync error during startup: {e}", "WARN")
+        uasyncio.create_task(_background_ntp_sync())
+
+async def _background_ntp_sync():
+    """Background NTP sync - waits for WiFi"""
+    # Wait for WiFi connection
+    while not state.wifi_connected:
+        await uasyncio.sleep(1)
+    
+    # Retry NTP sync
+    async def ntp_retry_wrapper():
+        host = config.get("general", "ntp_host", "pool.ntp.org")
+        return set_rtc_from_ntp(host)
+    
+    uasyncio.create_task(_retry_service("ntp", ntp_retry_wrapper))
+
+async def _startup_mqtt_connect():
+    """MQTT connection attempt during startup phase"""
+    global mqtt_connection_attempted
+    
+    if not state.wifi_connected:
+        service_status["mqtt"] = STATUS_OFF
+        return
+    
+    # Only attempt MQTT connection once, ever
+    if mqtt_connection_attempted:
+        return
+        
+    mqtt_connection_attempted = True
+    service_status["mqtt"] = STATUS_CONNECTING
+    draw_startup_grid()
+    
+    try:
+        mqtt_service = MQTTService()
+        state.mqtt_service = mqtt_service
+        
+        # Start the MQTT service loop in background
+        uasyncio.create_task(mqtt_service.loop())
+        
+        # Give it a shorter time during startup to show status quickly
+        connected = False
+        for _ in range(10):  # 1 second maximum during startup
+            if mqtt_service.connected:
+                connected = True
+                break
+            await uasyncio.sleep_ms(100)
+        
+        if connected:
+            service_status["mqtt"] = STATUS_ON
+            log("MQTT connected during startup - no further reconnection attempts", "INFO")
+        else:
+            service_status["mqtt"] = STATUS_CONNECTING  # Still trying in background
+            log("MQTT still connecting in background", "INFO")
+            # Continue trying in background
+            uasyncio.create_task(_background_mqtt_finish())
+            
+    except Exception as e:
+        log(f"MQTT setup failed during startup: {e}", "ERROR")
+        service_status["mqtt"] = STATUS_FAIL
+        state.mqtt_service = None
+
+async def _background_mqtt_finish():
+    """Finish MQTT connection attempt in background"""
+    if not state.mqtt_service:
+        return
+        
+    # Continue monitoring for connection for a bit longer
+    connected = False
+    for _ in range(20):  # Another 2 seconds in background
+        if state.mqtt_service.connected:
+            connected = True
+            break
+        await uasyncio.sleep_ms(100)
+    
+    if connected:
+        service_status["mqtt"] = STATUS_ON
+        log("MQTT connected in background - no further reconnection attempts", "INFO")
+    else:
+        service_status["mqtt"] = STATUS_FAIL
+        log("MQTT connection failed - will not retry to avoid blocking", "WARN")
+        state.mqtt_service = None
+
+async def _background_mqtt_connect():
+    """Legacy function - now handled by startup flow"""
+    pass
+
+async def _startup_streaming_connect():
+    """Streaming connection check during startup phase"""
+    if not state.wifi_connected:
+        service_status["streaming"] = STATUS_OFF
+        return
+    
+    host = config.get("streaming", "host", "127.0.0.1")
+    port = config.get("streaming", "port", 8000)
+    
+    service_status["streaming"] = STATUS_CONNECTING
+    draw_startup_grid()
+    
+    # Small delay to let network stack settle after WiFi connection
+    await uasyncio.sleep_ms(100)
+    
+    try:
+        # Slightly longer timeout to avoid race conditions
+        reader, writer = await uasyncio.wait_for(
+            uasyncio.open_connection(host, port), 1.2
+        )
+        writer.close()
+        await writer.wait_closed()
+        service_status["streaming"] = STATUS_ON
+        log("Streaming server connected during startup", "INFO")
+    except (OSError, uasyncio.TimeoutError) as e:
+        service_status["streaming"] = STATUS_FAIL
+        log(f"Streaming server not available during startup: {e}", "WARN")
+        
+        # Start background retry
+        uasyncio.create_task(_background_streaming_connect())
+
+async def _background_streaming_connect():
+    """Background streaming connection check"""
+    host = config.get("streaming", "host", "127.0.0.1")
+    port = config.get("streaming", "port", 8000)
+        
+    # Retry streaming connection
+    async def check_streaming():
+        try:
+            reader, writer = await uasyncio.wait_for(
+                uasyncio.open_connection(host, port), 2.0
+            )
+            writer.close()
+            await writer.wait_closed()
+            return True
+        except (OSError, uasyncio.TimeoutError):
+            return False
+    
+    uasyncio.create_task(_retry_service("streaming", check_streaming))
+
