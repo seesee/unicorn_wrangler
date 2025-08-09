@@ -1,2 +1,8 @@
 __pycache__/
 *.pyc
+.tiles_history
+board_client-sim/animations
+board_client-sim/requirements.txt
+board_client-sim/uw
+board_client-sim/wireframes
+*-config.json

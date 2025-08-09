@@ -36,6 +36,12 @@ parser.add_argument(
     default=None,
     help="Force a specific animation to run (overrides config sequence)"
 )
+parser.add_argument(
+    "--duration",
+    type=int,
+    default=None,
+    help="Animation duration in seconds (overrides config max_runtime_s)"
+)
 
 args = parser.parse_args()
 
@@ -109,10 +115,13 @@ async def main():
         job = sequence.pop(0)
         sequence.append(job)
 
+        # Use command line duration if provided, otherwise use config
+        duration = args.duration if args.duration is not None else config.get("general", "max_runtime_s", 120)
+        
         if job == "*" or job == "animation":
-            await run_random_animation(config.get("general", "max_runtime_s", 120))
+            await run_random_animation(duration)
         elif job in animation_list:
-            await run_named_animation(job, config.get("general", "max_runtime_s", 120))
+            await run_named_animation(job, duration)
         else:
             log(f"Unknown sequence job: {job}", "WARN")
 
