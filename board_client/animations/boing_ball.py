@@ -11,40 +11,42 @@ BALL_SPEED = 1.2  # pixels per frame (tweak for smoothness)
 SPIN_SPEED_X = 0.05  # radians per frame
 SPIN_SPEED_Y = 0.08  # radians per frame
 
-# --- AMIGA TICK LOGO (relative to center) ---
+# --- AMIGA TICK LOGO (efficient coordinate list) ---
 TICK_PIXELS = [
-    (0, 8), (1, 8), (2, 8), (-1, 7), (0, 7), (1, 7),
-    (2, 7), (3, 7), (-2, 6), (-1, 6), (0, 6), (-3, 5),
-    (-2, 5), (-1, 5), (2, 6), (3, 6), (4, 6), (3, 5),
-    (4, 5), (5, 5), (4, 4), (5, 4), (6, 4), (5, 3),
-    (6, 3), (7, 3), (6, 2), (7, 2), (8, 2), (7, 1),
-    (8, 1), (9, 1), (8, 0), (9, 0), (10, 0), (9, -1),
-    (10, -1), (11, -1),
+    # Converted from bitmap array - y=-1 to y=8, x=-3 to x=11
+    (8, 0), (10, 0),                      # y=0  (row 1)
+    (7, 1), (9, 1),                       # y=1  (row 2)
+    (6, 2), (8, 2),                       # y=2  (row 3)
+    (5, 3), (7, 3),                       # y=3  (row 4)
+    (4, 4), (6, 4),                       # y=4  (row 5)
+    (-3, 5), (-1, 5), (3, 5), (5, 5),     # y=5  (row 6)
+    (-2, 6), (0, 6), (2, 6), (4, 6),      # y=6  (row 7)
+    (-1, 7), (1, 7), (3, 7),              # y=7  (row 8)
+    (0, 8), (1, 8), (2, 8),               # y=8  (row 9)
 ]
 
-def draw_tick_rainbow(graphics, t):
-    # Compute tick logo bounding box and integer center
-    xs = [x for x, y in TICK_PIXELS]
-    ys = [y for x, y in TICK_PIXELS]
-    min_x, max_x = min(xs), max(xs)
-    min_y, max_y = min(ys), max(ys)
-    logo_w = max_x - min_x + 1
-    logo_h = max_y - min_y + 1
-    # Integer center (top-left of center pixel for even sizes)
-    center_x = min_x + logo_w // 2
-    center_y = min_y + logo_h // 2
-    span = max(logo_w, logo_h) or 1
+# Pre-compute static tick logo properties for performance
+_xs = [x for x, y in TICK_PIXELS]
+_ys = [y for x, y in TICK_PIXELS]
+TICK_MIN_X, TICK_MAX_X = min(_xs), max(_xs)
+TICK_MIN_Y, TICK_MAX_Y = min(_ys), max(_ys)
+TICK_LOGO_W = TICK_MAX_X - TICK_MIN_X + 1
+TICK_LOGO_H = TICK_MAX_Y - TICK_MIN_Y + 1
+TICK_CENTER_X = TICK_MIN_X + TICK_LOGO_W // 2
+TICK_CENTER_Y = TICK_MIN_Y + TICK_LOGO_H // 2
+TICK_SPAN = max(TICK_LOGO_W, TICK_LOGO_H) or 1
 
+def draw_tick_rainbow(graphics, t):
     # Center of display
     cx, cy = WIDTH // 2, HEIGHT // 2
 
     for i, (rel_x, rel_y) in enumerate(TICK_PIXELS):
         # Offset so the tick's center is at the display center
-        px = cx + (rel_x - center_x)
-        py = cy + (rel_y - center_y)
+        px = cx + (rel_x - TICK_CENTER_X)
+        py = cy + (rel_y - TICK_CENTER_Y)
         if 0 <= px < WIDTH and 0 <= py < HEIGHT:
             # Rainbow: hue based on position and time
-            progress = ((rel_x - min_x) + (rel_y - min_y)) / (2 * span)
+            progress = ((rel_x - TICK_MIN_X) + (rel_y - TICK_MIN_Y)) / (2 * TICK_SPAN)
             hue = (t * 0.12 + progress) % 1.0
             r, g, b = hsv_to_rgb(hue, 1.0, 1.0)
             graphics.set_pen(graphics.create_pen(r, g, b))
