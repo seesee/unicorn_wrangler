@@ -2,6 +2,7 @@ import uasyncio
 import random
 import math
 import utime
+from collections import deque
 
 from animations.utils import hsv_to_rgb
 from uw.hardware import WIDTH, HEIGHT, MODEL
@@ -31,14 +32,30 @@ async def run(graphics, gu, state, interrupt_event):
 
 async def run_bouncing_datetime(graphics, gu, state, interrupt_event):
     graphics.set_font("bitmap6")
-    # Start at a random grid position that fits the text
-    x = random.randint(0, WIDTH - 1)
-    y = random.randint(0, HEIGHT - 8)
+    
+    # Trail settings
+    TRAIL_LENGTH = 4
+    BRIGHTNESS_FALLOFF = 0.3
+    trail = deque((), TRAIL_LENGTH)
+    
+    # Get actual font metrics by measuring a sample string
+    sample_text = "00:00"
+    actual_text_width = graphics.measure_text(sample_text, 1)
+    actual_text_height = 8  # bitmap6 font is 8 pixels tall
+    
+    # Start at a random position that fits the text properly
+    x = random.randint(0, max(0, WIDTH - actual_text_width))
+    y = random.randint(0, max(0, HEIGHT - actual_text_height))
     dx = random.choice([-1, 1])
     dy = random.choice([-1, 1])
     hue = random.random()
+    
+    black_pen = graphics.create_pen(0, 0, 0)
 
     while not interrupt_event.is_set():
+        # Add current position to trail
+        trail.append((x, y))
+        
         dt = get_datetime()
         year, month, mday, wday, hour, minute, second, _ = dt
         if year < 2025:
@@ -50,8 +67,13 @@ async def run_bouncing_datetime(graphics, gu, state, interrupt_event):
         date_str = "{:02d}/{:02d}/{}".format(mday, month, year)
         msg = f"{time_str}"
 
+        # Get actual text dimensions for this specific text
         text_width = graphics.measure_text(msg, 1)
-        text_height = 8
+        text_height = actual_text_height  # Use the measured font height
+        
+        # Adjust text width to account for extra spacing in measure_text
+        # For "00:00" format, actual rendered width is typically 2 pixels less
+        adjusted_text_width = max(1, text_width - 2)
 
         # Move by exactly one pixel diagonally
         x += dx
@@ -59,12 +81,13 @@ async def run_bouncing_datetime(graphics, gu, state, interrupt_event):
 
         bounced = False
 
+        # Proper boundary checking using adjusted text dimensions
         if x < 0:
             x = 0
             dx = 1
             bounced = True
-        elif x > WIDTH - text_width:
-            x = WIDTH - text_width
+        elif x > WIDTH - adjusted_text_width:
+            x = WIDTH - adjusted_text_width
             dx = -1
             bounced = True
 
@@ -80,12 +103,23 @@ async def run_bouncing_datetime(graphics, gu, state, interrupt_event):
         if bounced:
             hue = (hue + 0.18 + random.uniform(0, 0.2)) % 1.0
 
-        graphics.set_pen(graphics.create_pen(0, 0, 0))
+        # Clear screen
+        graphics.set_pen(black_pen)
         graphics.clear()
 
+        # Draw trailing time displays with fade
+        for i, (trail_x, trail_y) in enumerate(trail):
+            # Fade the trail out
+            v = BRIGHTNESS_FALLOFF ** (len(trail) - i)
+            r, g, b = hsv_to_rgb(hue, 1.0, v)
+            trail_pen = graphics.create_pen(r, g, b)
+            graphics.set_pen(trail_pen)
+            graphics.text(msg, trail_x, trail_y, -1, 1)
+
+        # Draw the current bright time display
         r, g, b = hsv_to_rgb(hue, 1.0, 1.0)
-        pen = graphics.create_pen(r, g, b)
-        graphics.set_pen(pen)
+        current_pen = graphics.create_pen(r, g, b)
+        graphics.set_pen(current_pen)
         graphics.text(msg, x, y, -1, 1)
 
         gu.update(graphics)

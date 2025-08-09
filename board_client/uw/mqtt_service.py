@@ -16,12 +16,17 @@ class MQTTService:
         self.client = None
         self.client_id = None
         self.connected = False
+        self.connection_attempted = False
+        self.disable_reconnect = False
 
     def connect(self):
         if not MQTTClient:
             log("MQTTClient not available (umqtt.simple not installed)", "WARN")
             return False
 
+        # Mark that we've attempted connection
+        self.connection_attempted = True
+        
         broker = config.get("mqtt", "broker_ip", "127.0.0.1")
         port = config.get("mqtt", "broker_port", 1883)
         client_id = config.get("mqtt", "client_id", "unicorn")
@@ -35,15 +40,16 @@ class MQTTService:
             self.client.sock.setblocking(False)
             self.connected = True
             self.client_id = client_id
-            log(f"Connected to MQTT broker at {broker}:{port}", "INFO")
+            log(f"Connected to MQTT broker at {broker}:{port} - reconnection disabled", "INFO")
             # Subscribe to topics as needed
             self.client.subscribe(config.get("mqtt", "topic_on_off", "unicorn/control/onoff"))
             self.client.subscribe(config.get("mqtt", "topic_cmd", "unicorn/control/cmd"))
             self.client.subscribe(config.get("mqtt", "topic_text_message", "unicorn/message/text"))
             return True
         except Exception as e:
-            log(f"MQTT connection failed: {e}", "ERROR")
+            log(f"MQTT connection failed: {e} - will not retry", "ERROR")
             self.connected = False
+            self.disable_reconnect = True  # Prevent future reconnection attempts
             return False
 
     def publish_status(self, status_dict):
@@ -59,7 +65,9 @@ class MQTTService:
             log(f"Published status to {topic}: {payload}", "DEBUG")
             return True
         except Exception as e:
-            log(f"Failed to publish status: {e}", "ERROR")
+            log(f"Failed to publish status: {e} - disabling MQTT", "WARN")
+            self.connected = False
+            self.disable_reconnect = True
             return False
 
     def _on_message(self, topic, msg):
@@ -117,8 +125,12 @@ class MQTTService:
             if not state.wifi_connected:
                 await uasyncio.sleep(1)
                 continue
-            if not self.connected:
+                
+            # Only attempt connection once, never reconnect
+            if not self.connected and not self.connection_attempted and not self.disable_reconnect:
                 self.connect()
+            
+            # If we're connected, process messages
             if self.connected:
                 try:
                     self.client.check_msg()
@@ -127,9 +139,12 @@ class MQTTService:
                         pass # No data available right now, check again later.
                     else:
                         # Some other OSError, treat as a connection error.
-                        log(f"MQTT check_msg OSError: {e}", "ERROR")
+                        log(f"MQTT connection lost: {e} - not reconnecting (design choice)", "WARN")
                         self.connected = False
+                        self.disable_reconnect = True  # Never try to reconnect
                 except Exception as e:
-                    log(f"MQTT check_msg error: {e}", "ERROR")
+                    log(f"MQTT error: {e} - not reconnecting (design choice)", "WARN")
                     self.connected = False
+                    self.disable_reconnect = True  # Never try to reconnect
+                    
             await uasyncio.sleep_ms(100)

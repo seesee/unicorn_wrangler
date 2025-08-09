@@ -1,5 +1,6 @@
 import uasyncio
 import machine
+import random
 
 from uw.config import config
 from uw.logger import setup_logging, log
@@ -9,12 +10,51 @@ from uw.animation_service import run_random_animation, run_named_animation, get_
 from uw.background_tasks import button_monitor, debug_monitor
 from uw.transitions import melt_off, countdown
 from uw.service_manager import initialise_services
+from animations.utils import uwPrng
 
 # conveyer belt
 def rotate_sequence(seq):
     item = seq.pop(0)
     seq.append(item)
     return item
+
+def create_random_pool(animation_list, sequence):
+    """Create a randomized pool of animations excluding those explicitly in sequence"""
+    # Find animations that are explicitly in the sequence (not wildcards)
+    explicit_anims = set()
+    for item in sequence:
+        if item != "*" and item in animation_list:
+            explicit_anims.add(item)
+    
+    # Create pool of remaining animations
+    random_pool = []
+    for anim in animation_list:
+        if anim not in explicit_anims:
+            random_pool.append(anim)
+    
+    # Shuffle the pool using uwPrng for better entropy
+    prng = uwPrng()
+    for i in range(len(random_pool) - 1, 0, -1):
+        j = prng.randint(0, i)
+        random_pool[i], random_pool[j] = random_pool[j], random_pool[i]
+    
+    return random_pool
+
+def get_next_random_animation(random_pool, pool_index):
+    """Get next animation from random pool, cycling when exhausted"""
+    if not random_pool:
+        return None, 0
+    
+    # If we've exhausted the pool, reshuffle and restart
+    if pool_index >= len(random_pool):
+        prng = uwPrng()
+        for i in range(len(random_pool) - 1, 0, -1):
+            j = prng.randint(0, i)
+            random_pool[i], random_pool[j] = random_pool[j], random_pool[i]
+        pool_index = 0
+    
+    animation = random_pool[pool_index]
+    return animation, pool_index + 1
 
 async def handle_text_interrupt():
     if state.interrupt_event.is_set():
@@ -46,6 +86,11 @@ async def main():
     sequence = list(config.get("general", "sequence", ["streaming", "*"]))
     animation_list = get_animation_list()
     state.max_iterations = config.get("general", "max_iterations", -1)
+    
+    # Create random animation pool excluding explicit sequence items
+    random_pool = create_random_pool(animation_list, sequence)
+    random_pool_index = 0
+    log(f"Random pool created with {len(random_pool)} animations", "INFO")
 
     # main loop
     while True:
@@ -67,7 +112,14 @@ async def main():
                 # onair can loop indefinitely; only count non-onair iterations
                 state.max_iterations -= 1
 
-            if job == "*" or job == "animation":
+            if job == "*":
+                # Get next random animation from pool
+                job, random_pool_index = get_next_random_animation(random_pool, random_pool_index)
+                if job is None:
+                    log("No animations available for wildcard, skipping", "WARN")
+                    continue
+
+            if job == "animation":
                 await run_random_animation(config.get("general", "max_runtime_s", 120))
             elif job in animation_list:
                 await run_named_animation(job, config.get("general", "max_runtime_s", 120))
