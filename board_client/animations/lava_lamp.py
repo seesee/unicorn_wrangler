@@ -106,10 +106,12 @@ class LavaBlob:
             self.y = lamp_height + 2 - self.radius
             self.vy = min(0, self.vy)  # Only bounce if moving down too far
         
-        # Handle horizontal boundaries (sides) - decay horizontal momentum
+        # Apply horizontal velocity decay unconditionally to prevent accumulation
+        self.vx *= 0.9
+        
+        # Handle horizontal boundaries (sides) - only update position when rotated
         if rotated:
-            # For galactic, also apply decay to horizontal movement from splits
-            self.vx *= 0.9
+            # For galactic, apply horizontal movement from splits
             self.x += self.vx * dt
             # Bounce off sides
             if self.x < self.radius:
@@ -429,11 +431,11 @@ class LavaLamp:
                                 # Soft edges with brightness falloff
                                 dist_sq = norm_x*norm_x + norm_y*norm_y
                                 edge_factor = dist_sq / (blob_radius*blob_radius)
-                                brightness = 1.0 - edge_factor * 0.4
+                                brightness = max(0.0, min(1.0, 1.0 - edge_factor * 0.4))
                                 
-                                final_r = min(255, int(r * brightness))
-                                final_g = min(255, int(g * brightness)) 
-                                final_b = min(255, int(b * brightness))
+                                final_r = max(0, min(255, int(r * brightness)))
+                                final_g = max(0, min(255, int(g * brightness))) 
+                                final_b = max(0, min(255, int(b * brightness)))
                                 
                                 graphics.set_pen(graphics.create_pen(final_r, final_g, final_b))
                                 graphics.pixel(pixel_x, pixel_y)
