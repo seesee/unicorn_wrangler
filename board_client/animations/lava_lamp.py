@@ -197,17 +197,8 @@ class LavaLamp:
     
     def check_merging(self):
         """Merge nearby blobs with size and state restrictions"""
-        # Scale max blob count based on display size
-        total_pixels = self.width * self.height
-        if total_pixels < 300:
-            max_blobs = 6   # Stellar can handle 6
-        elif total_pixels < 800:
-            max_blobs = 8   # Galactic can handle 8
-        else:
-            max_blobs = 10  # Cosmic can handle 10
-            
-        if len(self.blobs) >= max_blobs:
-            return
+        # Allow merging regardless of blob count since merging reduces blob count
+        # This helps reduce visual clutter when there are too many blobs
             
         for i in range(len(self.blobs)):
             for j in range(i + 1, len(self.blobs)):

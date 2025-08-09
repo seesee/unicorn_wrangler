@@ -46,7 +46,9 @@ async def run(graphics, gu, state, interrupt_event):
             self.vx = fast_cos(tangent_angle) * speed
             self.vy = fast_sin(tangent_angle) * speed
 
-            self.history.clear()
+            # Clear deque by popping all elements (MicroPython compatible)
+            while self.history:
+                self.history.popleft()
             for _ in range(TRAIL_LENGTH):
                 self.history.append((self.x, self.y))
 
