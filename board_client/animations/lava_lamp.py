@@ -392,11 +392,6 @@ class LavaLamp:
         for blob in self.blobs:
             r, g, b = blob.get_color(self.base_hue)
             
-            # Only render blobs that are within the visible display area
-            # (Skip blobs in virtual heating/cooling zones)
-            if blob.y < 0 or blob.y > display_height:
-                continue
-            
             # Calculate screen position
             if self.rotated:
                 # For galactic mode, transform coordinates for display rotation

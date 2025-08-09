@@ -1,9 +1,7 @@
 import uasyncio
-import random
 import math
 
 from animations.utils import hsv_to_rgb, uwPrng
-from uw.hardware import WIDTH, HEIGHT
 
 def is_area_free(occupied, x, y, size, width, height):
     """Check if a sparkle area is free from overlap"""

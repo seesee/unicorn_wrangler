@@ -2,7 +2,6 @@ import uasyncio
 import uarray
 import micropython
 from animations.utils import hsv_to_rgb, fast_sin, fast_cos, uwPrng
-from animations.utils import hsv_to_rgb, fast_sin, fast_cos
 from uw.hardware import WIDTH, HEIGHT
 
 # 3D polyhedra defined as (vertices, faces) with normalized coordinates
@@ -108,20 +107,6 @@ def rotate_point(x, y, z, cos_rx, sin_rx, cos_ry, sin_ry, cos_rz, sin_rz):
     return x2, y2, z2
 
 @micropython.native
-def interpolate_vertices(verts1, verts2, t, result_array):
-    """Optimized interpolation using pre-allocated result array"""
-    inv_t = 1.0 - t
-    for i in range(len(result_array)):
-        if i < len(verts1) and i < len(verts2):
-            result_array[i] = verts1[i] * inv_t + verts2[i] * t
-        elif i < len(verts1):
-            result_array[i] = verts1[i]
-        elif i < len(verts2):
-            result_array[i] = verts2[i]
-        else:
-            result_array[i] = 0.0
-
-@micropython.native
 def calculate_normal(v1, v2, v3):
     """Calculates the normal vector of a face."""
     ux, uy, uz = v2[0] - v1[0], v2[1] - v1[1], v2[2] - v1[2]
@@ -150,6 +135,9 @@ def fill_polygon(graphics, polygon, r, g, b):
     min_y = max(0, min(v[1] for v in polygon))
     max_y = min(HEIGHT - 1, max(v[1] for v in polygon))
 
+    # Set pen once for the entire polygon fill
+    graphics.set_pen(graphics.create_pen(r, g, b))
+
     for y in range(min_y, max_y + 1):
         intersections = []
         for i in range(len(polygon)):
@@ -167,7 +155,6 @@ def fill_polygon(graphics, polygon, r, g, b):
                 x1 = int(max(0, intersections[i]))
                 x2 = int(min(WIDTH - 1, intersections[i+1]))
                 if x1 <= x2:
-                    graphics.set_pen(graphics.create_pen(r, g, b))
                     graphics.line(x1, y, x2, y)
 
 @micropython.native

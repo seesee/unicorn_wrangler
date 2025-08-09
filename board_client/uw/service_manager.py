@@ -235,11 +235,12 @@ async def _startup_mqtt_connect():
     if mqtt_connection_attempted:
         return
         
-    mqtt_connection_attempted = True
     service_status["mqtt"] = STATUS_CONNECTING
     draw_startup_grid()
     
     try:
+        # Set flag only after we actually attempt the connection
+        mqtt_connection_attempted = True
         mqtt_service = MQTTService()
         state.mqtt_service = mqtt_service
         

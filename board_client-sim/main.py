@@ -45,6 +45,10 @@ parser.add_argument(
 
 args = parser.parse_args()
 
+# Validate duration argument
+if args.duration is not None and args.duration <= 0:
+    parser.error("--duration must be > 0")
+
 # Patch sys.path so imports work
 import os
 sys.path.insert(0, os.path.abspath("."))
