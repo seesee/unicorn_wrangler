@@ -11,44 +11,58 @@ BALL_SPEED = 1.2  # pixels per frame (tweak for smoothness)
 SPIN_SPEED_X = 0.05  # radians per frame
 SPIN_SPEED_Y = 0.08  # radians per frame
 
-# --- AMIGA TICK LOGO (relative to center) ---
-TICK_PIXELS = [
-    (0, 8), (1, 8), (2, 8), (-1, 7), (0, 7), (1, 7),
-    (2, 7), (3, 7), (-2, 6), (-1, 6), (0, 6), (-3, 5),
-    (-2, 5), (-1, 5), (2, 6), (3, 6), (4, 6), (3, 5),
-    (4, 5), (5, 5), (4, 4), (5, 4), (6, 4), (5, 3),
-    (6, 3), (7, 3), (6, 2), (7, 2), (8, 2), (7, 1),
-    (8, 1), (9, 1), (8, 0), (9, 0), (10, 0), (9, -1),
-    (10, -1), (11, -1),
+# --- AMIGA TICK LOGO (as bitmap array) ---
+# Array is [row][col] where each row represents a y-coordinate from top to bottom
+# x ranges from -3 to 11 (15 columns), y ranges from -1 to 8 (10 rows)
+# Array indices: x_offset = 3, y_offset = 1 (to handle negative coordinates)
+TICK_BITMAP = [
+    [0,0,0,0,0,0,0,0,0,0,0,0,1,0,1],
+    [0,0,0,0,0,0,0,0,0,0,0,1,0,1,0],
+    [0,0,0,0,0,0,0,0,0,0,1,0,1,0,0],
+    [0,0,0,0,0,0,0,0,0,1,0,1,0,0,0],
+    [0,0,0,0,0,0,0,0,1,0,1,0,0,0,0],
+    [0,0,0,0,0,0,0,1,0,1,0,0,0,0,0],
+    [1,0,1,0,0,0,1,0,1,0,0,0,0,0,0],
+    [0,1,0,1,0,1,0,1,0,0,0,0,0,0,0],
+    [0,0,1,0,1,0,1,0,0,0,0,0,0,0,0],
+    [0,0,0,1,1,1,0,0,0,0,0,0,0,0,0],
 ]
 
 def draw_tick_rainbow(graphics, t):
-    # Compute tick logo bounding box and integer center
-    xs = [x for x, y in TICK_PIXELS]
-    ys = [y for x, y in TICK_PIXELS]
-    min_x, max_x = min(xs), max(xs)
-    min_y, max_y = min(ys), max(ys)
-    logo_w = max_x - min_x + 1
-    logo_h = max_y - min_y + 1
+    # Bitmap coordinates: x from -3 to 11, y from -1 to 8
+    min_x, max_x = -3, 11
+    min_y, max_y = -1, 8
+    logo_w = max_x - min_x + 1  # 15
+    logo_h = max_y - min_y + 1  # 10
+    x_offset = 3  # to handle negative x coordinates
+    y_offset = 1  # to handle negative y coordinates
+    
     # Integer center (top-left of center pixel for even sizes)
-    center_x = min_x + logo_w // 2
-    center_y = min_y + logo_h // 2
+    center_x = min_x + logo_w // 2  # 4
+    center_y = min_y + logo_h // 2  # 3
     span = max(logo_w, logo_h) or 1
 
     # Center of display
     cx, cy = WIDTH // 2, HEIGHT // 2
 
-    for i, (rel_x, rel_y) in enumerate(TICK_PIXELS):
-        # Offset so the tick's center is at the display center
-        px = cx + (rel_x - center_x)
-        py = cy + (rel_y - center_y)
-        if 0 <= px < WIDTH and 0 <= py < HEIGHT:
-            # Rainbow: hue based on position and time
-            progress = ((rel_x - min_x) + (rel_y - min_y)) / (2 * span)
-            hue = (t * 0.12 + progress) % 1.0
-            r, g, b = hsv_to_rgb(hue, 1.0, 1.0)
-            graphics.set_pen(graphics.create_pen(r, g, b))
-            graphics.pixel(px, py)
+    for row in range(len(TICK_BITMAP)):
+        for col in range(len(TICK_BITMAP[row])):
+            if TICK_BITMAP[row][col] == 1:
+                # Convert array indices back to world coordinates
+                rel_x = col - x_offset  # col 0 = x=-3
+                rel_y = row - y_offset  # row 0 = y=-1
+                
+                # Offset so the tick's center is at the display center
+                px = cx + (rel_x - center_x)
+                py = cy + (rel_y - center_y)
+                
+                if 0 <= px < WIDTH and 0 <= py < HEIGHT:
+                    # Rainbow: hue based on position and time
+                    progress = ((rel_x - min_x) + (rel_y - min_y)) / (2 * span)
+                    hue = (t * 0.12 + progress) % 1.0
+                    r, g, b = hsv_to_rgb(hue, 1.0, 1.0)
+                    graphics.set_pen(graphics.create_pen(r, g, b))
+                    graphics.pixel(px, py)
 
 
 def draw_ball(graphics, ball_x, ball_y, spin_x, spin_y, box_cx, box_cy, ball_radius, checker_squares=8):
