@@ -2,7 +2,7 @@ import uasyncio
 import math
 import random
 from animations.utils import hsv_to_rgb, fast_sin, fast_cos
-from uw.hardware import WIDTH, HEIGHT, MODEL
+from uw.hardware import MODEL
 
 class LavaBlob:
     def __init__(self, x, y, radius):
@@ -28,8 +28,6 @@ class LavaBlob:
         pos = self.y
         display_top = 0
         display_bottom = lamp_height
-        virtual_cool_start = -2
-        virtual_heat_end = lamp_height + 2
         
         # Heat/cool zones include virtual areas
         heat_zone = display_bottom * 0.85  # Bottom 15% + virtual heating
@@ -375,17 +373,19 @@ class LavaLamp:
         
         # Create subtle cycling rainbow gradient background
         for y in range(display_height):
+            # Calculate gradient position (0.0 to 1.0)
+            # For both modes, gradient runs vertically
+            gradient_pos = y / max(1, display_height - 1)
+            
+            # Create rainbow hue that cycles over time and position
+            rainbow_hue = (self.background_time * 0.1 + gradient_pos * 0.8) % 1.0
+            
+            # Very dim rainbow colors (low saturation and value) - compute once per row
+            bg_r, bg_g, bg_b = hsv_to_rgb(rainbow_hue, 0.3, 0.15)  # Subtle colors
+            graphics.set_pen(graphics.create_pen(bg_r, bg_g, bg_b))
+            
+            # Draw entire row with the same color
             for x in range(display_width):
-                # Calculate gradient position (0.0 to 1.0)
-                # For both modes, gradient runs vertically
-                gradient_pos = y / max(1, display_height - 1)
-                
-                # Create rainbow hue that cycles over time and position
-                rainbow_hue = (self.background_time * 0.1 + gradient_pos * 0.8) % 1.0
-                
-                # Very dim rainbow colors (low saturation and value)
-                bg_r, bg_g, bg_b = hsv_to_rgb(rainbow_hue, 0.3, 0.15)  # Subtle colors
-                graphics.set_pen(graphics.create_pen(bg_r, bg_g, bg_b))
                 graphics.pixel(x, y)
         
         # Render each blob
