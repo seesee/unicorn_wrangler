@@ -5,6 +5,7 @@ from uw.state import state
 from uw.logger import log
 from uw.hardware import graphics, gu, WIDTH, HEIGHT, MODEL
 from uw.config import config
+from uw.service_manager import mark_streaming_working
 
 FRAME_BUFFER_SIZE = WIDTH * HEIGHT * 2
 
@@ -59,6 +60,9 @@ async def run(
             cmd = f"QRCLOCK:{tz_offset}\n"
             writer.write(cmd.encode("utf-8"))
             await writer.drain()
+            
+            # Mark streaming as working to stop background service retries
+            mark_streaming_working()
 
             while not interrupt_event.is_set():
                 # Read 4-byte frame size header

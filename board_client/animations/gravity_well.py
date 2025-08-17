@@ -95,8 +95,8 @@ async def run(graphics, gu, state, interrupt_event):
             # Draw the trail
             for i, (x, y) in enumerate(self.history):
                 brightness = 1.0 - (i / TRAIL_LENGTH)
-                hue = 0.6 - (self.mass - MIN_MASS) / (MAX_MASS - MIN_MASS) * 0.6
-                r, g, b = hsv_to_rgb(hue, 0.9, 0.8 * brightness * brightness)
+                hue = max(0.0, min(1.0, 0.6 - (self.mass - MIN_MASS) / (MAX_MASS - MIN_MASS) * 0.6))
+                r, g, b = hsv_to_rgb(hue, 0.9, max(0.0, min(1.0, 0.8 * brightness * brightness)))
                 pen = graphics.create_pen(r, g, b)
                 graphics.set_pen(pen)
                 px, py = int(x), int(y)
@@ -116,7 +116,7 @@ async def run(graphics, gu, state, interrupt_event):
                     if dist <= PLANET_RADIUS:
                         hue = (0.3 + (gravity_strength - 0.5) / 1.0 * 0.5) % 1.0
                         val = 1.0 - (dist / PLANET_RADIUS)
-                        r, g, b = hsv_to_rgb(hue, 0.8, val * 0.9)
+                        r, g, b = hsv_to_rgb(hue, 0.8, max(0.0, min(1.0, val * 0.9)))
                         pen = graphics.create_pen(r, g, b)
                         graphics.set_pen(pen)
                         graphics.pixel(x, y)

@@ -5,6 +5,7 @@ from uw.state import state
 from uw.logger import log
 from uw.hardware import graphics, gu, WIDTH, HEIGHT
 from uw.config import config
+from uw.service_manager import mark_streaming_working
 
 FRAME_BUFFER_SIZE = WIDTH * HEIGHT * 2
 MAX_RETRIES = 10
@@ -45,6 +46,10 @@ async def connect_and_request_stream(host, port, request_cmd):
             uasyncio.open_connection(host, port), timeout=10.0
         )
         log("Stream connection established", "INFO")
+        
+        # Mark streaming as working to stop background service retries
+        mark_streaming_working()
+        
         writer.write(request_cmd.encode('utf-8'))
         await writer.drain()
         response_line = await uasyncio.wait_for(reader.readline(), timeout=5.0)

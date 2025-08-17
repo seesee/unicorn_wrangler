@@ -47,6 +47,8 @@ async def run(graphics, gu, state, interrupt_event):
     SPARKLE_SATURATION_MIN = 0.9
     SPARKLE_SATURATION_MAX = 1.0
     
+    # Note: Creating pens dynamically as set_rgb method doesn't exist
+    
     # Decay rates based on size (larger sparkles fade slower)
     DECAY_RATES = {
         2: (0.015, 0.06), # 2x2: baseline fade rate
@@ -72,9 +74,12 @@ async def run(graphics, gu, state, interrupt_event):
     
     sparkles = []
     
+    # Pre-allocate black pen for clearing
+    black_pen = graphics.create_pen(0, 0, 0)
+    
     while not interrupt_event.is_set():
         # Clear screen
-        graphics.set_pen(graphics.create_pen(0, 0, 0))
+        graphics.set_pen(black_pen)
         graphics.clear()
         
         # Create occupancy grid to prevent sparkle overlap (rebuilt each frame)
@@ -197,8 +202,9 @@ async def run(graphics, gu, state, interrupt_event):
                         final_g = int(g * final_intensity)
                         final_b = int(b * final_intensity)
                         
-                        # Draw pixel
-                        graphics.set_pen(graphics.create_pen(final_r, final_g, final_b))
+                        # Draw pixel with dynamically created pen
+                        pixel_pen = graphics.create_pen(final_r, final_g, final_b)
+                        graphics.set_pen(pixel_pen)
                         graphics.pixel(pixel_x, pixel_y)
         
         gu.update(graphics)

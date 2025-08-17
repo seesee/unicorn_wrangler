@@ -1,7 +1,7 @@
 import uasyncio
 import math
 from animations.utils import hsv_to_rgb, fast_sin, fast_cos
-from uw.hardware import WIDTH, HEIGHT
+from uw.hardware import WIDTH, HEIGHT, MODEL
 
 class Point3D:
     """Simple 3D point with transformation and projection"""
@@ -37,8 +37,9 @@ class Point3D:
         screen_x = int(self.x * scale + WIDTH / 2)
         screen_y = int(self.y * scale + HEIGHT / 2)
         
-        # Depth-based brightness
-        brightness = max(0.2, min(1.0, 60.0 / z_cam))
+        # Enhanced depth-based brightness for better 3D effect
+        # Closer objects (smaller z_cam) get brighter, farther objects get much dimmer
+        brightness = max(0.05, min(1.0, (50.0 / z_cam) ** 1.8))  # More aggressive falloff
         
         return screen_x, screen_y, brightness, z_cam
 
@@ -55,7 +56,7 @@ class HelixLine:
         return HelixLine(tp1, tp2, self.color_hue)
     
     def project_and_draw(self, graphics, zoom, camera_distance):
-        """Project and draw the line if both points are on screen"""
+        """Project and draw double-thickness line if both points are on screen"""
         x1, y1, b1, z1 = self.p1.project(zoom, camera_distance)
         x2, y2, b2, z2 = self.p2.project(zoom, camera_distance)
         
@@ -65,76 +66,102 @@ class HelixLine:
             
             avg_brightness = (b1 + b2) / 2
             r, g, b = hsv_to_rgb(self.color_hue, 0.9, avg_brightness)
-            graphics.set_pen(graphics.create_pen(r, g, b))
-            graphics.line(x1, y1, x2, y2)
+            # Create pen dynamically (no set_rgb method exists)
+            line_pen = graphics.create_pen(int(r), int(g), int(b))
+            graphics.set_pen(line_pen)
+            
+            # Draw multiple lines for thickness - adjust thickness based on depth for consistent 3D appearance
+            graphics.line(x1, y1, x2, y2)  # Original line
+            
+            # Scale thickness based on brightness (closer = thicker, farther = thinner)
+            # This compensates for perspective and keeps visual thickness consistent
+            thickness_scale = max(0.3, avg_brightness)  # Never go below 30% thickness
+            
+            # Only add thickness if the scale suggests the line is close enough
+            if thickness_scale > 0.5:  # Only thick lines for closer parts
+                graphics.line(x1 + 1, y1, x2 + 1, y2)  # Right offset
+                graphics.line(x1, y1 + 1, x2, y2 + 1)  # Down offset
+                graphics.line(x1 - 1, y1, x2 - 1, y2)  # Left offset
+                graphics.line(x1, y1 - 1, x2, y2 - 1)  # Up offset
+                
+                # For larger displays and very close lines, add more thickness
+                if WIDTH > 16 and thickness_scale > 0.7:
+                    graphics.line(x1 + 1, y1 + 1, x2 + 1, y2 + 1)  # Down-right diagonal
+                    graphics.line(x1 - 1, y1 - 1, x2 - 1, y2 - 1)  # Up-left diagonal
+                    if WIDTH > 32 and thickness_scale > 0.8:  # Only thickest for galactic and very close
+                        graphics.line(x1 + 1, y1 - 1, x2 + 1, y2 - 1)  # Up-right diagonal
+                        graphics.line(x1 - 1, y1 + 1, x2 - 1, y2 + 1)  # Down-left diagonal
+                    
             return (z1 + z2) / 2  # Average depth for sorting
         return float('inf')
 
-def generate_helix_points():
-    """Generate 3D points for DNA double helix structure"""
-    points = []
+def generate_helix_lines():
+    """Generate line segments to approximate DNA double helix structure"""
     lines = []
     
-    # Helix parameters
-    helix_radius = 12
-    helix_height = 60
-    num_points = 40
-    num_base_pairs = 12
-    twist_factor = 4.0  # Number of full rotations
+    # Helix parameters - optimized for double-thickness lines
+    if MODEL == "galactic":
+        # Galactic is wide (53x11) - make longer strand to use width better
+        helix_radius = 12  # Slightly smaller radius to accommodate thicker lines
+        helix_height = 85  # Slightly shorter to keep proportions
+        num_segments = 44  # Adjust segment count for optimal thick line appearance
+        twist_factor = 5.5  # Slightly fewer rotations for cleaner thick lines
+    elif WIDTH >= 32:
+        # Cosmic (32x32) - medium parameters
+        helix_radius = 10  # Good balance for thick lines
+        helix_height = 55  
+        num_segments = 36  # More segments for smoother thick curves
+        twist_factor = 3.8  # Optimal twist for thick line visibility
+    else:
+        # Stellar (16x16) - compact parameters
+        helix_radius = 6   # Smaller radius for tiny display with thick lines
+        helix_height = 35  # Shorter to fit better
+        num_segments = 24  # Fewer segments but still smooth with thick lines
+        twist_factor = 3.0  # Fewer rotations to avoid overcrowding
     
-    # Generate strand points
-    strand1_points = []
-    strand2_points = []
-    
-    for i in range(num_points):
-        t = i / (num_points - 1)
-        angle = t * twist_factor * 2 * math.pi
-        z = -helix_height / 2 + t * helix_height
+    # Generate line segments directly (no individual points)
+    for i in range(num_segments):
+        t1 = i / num_segments
+        t2 = (i + 1) / num_segments
         
-        # Strand 1 (blue)
-        x1 = helix_radius * fast_cos(angle)
-        y1 = helix_radius * fast_sin(angle)
-        p1 = Point3D(x1, y1, z, 0.6, 'strand')  # Blue hue
-        strand1_points.append(p1)
-        points.append(p1)
+        # Calculate positions at both ends of segment
+        angle1 = t1 * twist_factor * 2 * math.pi
+        angle2 = t2 * twist_factor * 2 * math.pi
+        z1 = -helix_height / 2 + t1 * helix_height
+        z2 = -helix_height / 2 + t2 * helix_height
+        
+        # Strand 1 (blue) - segment from point i to point i+1
+        x1_start = helix_radius * fast_cos(angle1)
+        y1_start = helix_radius * fast_sin(angle1)
+        x1_end = helix_radius * fast_cos(angle2)
+        y1_end = helix_radius * fast_sin(angle2)
+        
+        p1_start = Point3D(x1_start, y1_start, z1, 0.6, 'strand')  # Blue hue
+        p1_end = Point3D(x1_end, y1_end, z2, 0.6, 'strand')
+        lines.append(HelixLine(p1_start, p1_end, 0.6))  # Blue
         
         # Strand 2 (red) - opposite side
-        x2 = -x1
-        y2 = -y1
-        p2 = Point3D(x2, y2, z, 0.0, 'strand')  # Red hue
-        strand2_points.append(p2)
-        points.append(p2)
-    
-    # Connect strand backbones
-    for i in range(len(strand1_points) - 1):
-        lines.append(HelixLine(strand1_points[i], strand1_points[i + 1], 0.6))  # Blue
-        lines.append(HelixLine(strand2_points[i], strand2_points[i + 1], 0.0))  # Red
-    
-    # Generate base pairs (connecting rungs)
-    for i in range(num_base_pairs):
-        t = i / (num_base_pairs - 1)
-        angle = t * twist_factor * 2 * math.pi
-        z = -helix_height / 2 + t * helix_height
+        x2_start = -x1_start
+        y2_start = -y1_start
+        x2_end = -x1_end
+        y2_end = -y1_end
         
-        # Base pair endpoints
-        x1 = helix_radius * fast_cos(angle)
-        y1 = helix_radius * fast_sin(angle)
-        p1 = Point3D(x1, y1, z, 0.3, 'basepair')  # Green hue
-        
-        x2 = -x1
-        y2 = -y1  
-        p2 = Point3D(x2, y2, z, 0.3, 'basepair')  # Green hue
-        
-        # Add base pair line
-        lines.append(HelixLine(p1, p2, 0.3))  # Green
+        p2_start = Point3D(x2_start, y2_start, z1, 0.0, 'strand')  # Red hue
+        p2_end = Point3D(x2_end, y2_end, z2, 0.0, 'strand')
+        lines.append(HelixLine(p2_start, p2_end, 0.0))  # Red
     
-    return points, lines
+    return lines
 
 async def run(graphics, gu, state, interrupt_event):
     """Main animation loop with 3D camera movement"""
     
-    # Generate the helix structure
-    helix_points, helix_lines = generate_helix_points()
+    # Generate the helix structure (lines only for better performance)
+    helix_lines = generate_helix_lines()
+    
+    # Pre-allocate pens to avoid memory allocation in animation loop
+    black_pen = graphics.create_pen(0, 0, 0)
+    # Create reusable pen for dynamic colors
+    temp_pen = graphics.create_pen(0, 0, 0)
     
     # Animation state
     time = 0.0
@@ -143,12 +170,17 @@ async def run(graphics, gu, state, interrupt_event):
     camera_tilt_speed = 0.05
     zoom_speed = 0.06
     
-    # Base parameters
-    base_zoom = min(WIDTH, HEIGHT) * 2.5
+    # Base parameters - model-specific zoom
+    if MODEL == "galactic":
+        # Galactic (53x11) - zoom in more to fill the wide display better
+        base_zoom = WIDTH * 1.8  # Use width instead of min, zoom in closer
+    else:
+        # Cosmic/Stellar - standard zoom
+        base_zoom = min(WIDTH, HEIGHT) * 2.5
     
     while not interrupt_event.is_set():
         # Clear screen
-        graphics.set_pen(graphics.create_pen(0, 0, 0))
+        graphics.set_pen(black_pen)
         graphics.clear()
         
         # Calculate camera parameters
@@ -163,23 +195,9 @@ async def run(graphics, gu, state, interrupt_event):
             t_line = line.transform(camera_tilt, camera_orbit, helix_rotation)
             transformed_lines.append(t_line)
         
-        # Project and collect lines with depth info
-        line_depths = []
+        # Project and draw lines only (no individual points for better performance)
         for line in transformed_lines:
-            depth = line.project_and_draw(graphics, zoom, 80)
-            if depth != float('inf'):
-                line_depths.append(depth)
-        
-        # Draw strand points for extra detail
-        for point in helix_points:
-            if point.point_type == 'strand':  # Only draw strand points, not base pair points
-                t_point = point.transform(camera_tilt, camera_orbit, helix_rotation)
-                x, y, brightness, z = t_point.project(zoom, 80)
-                
-                if 0 <= x < WIDTH and 0 <= y < HEIGHT:
-                    r, g, b = hsv_to_rgb(t_point.color_hue, 1.0, brightness)
-                    graphics.set_pen(graphics.create_pen(r, g, b))
-                    graphics.pixel(x, y)
+            line.project_and_draw(graphics, zoom, 80)
         
         # Update display
         gu.update(graphics)

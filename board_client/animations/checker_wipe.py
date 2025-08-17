@@ -16,12 +16,22 @@ ZOOM_MAX = 1.3
 
 SCALE = 1024
 
+# Pre-scaled trigonometric tables at import time (Item 19)
+SIN_TABLE_PRESCALED = [int(s * SCALE) for s in SIN_TABLE]
+COS_TABLE_PRESCALED = [int(c * SCALE) for c in COS_TABLE]
+
+# Pre-computed reciprocals for division optimization (Item 18)
+RECIPROCAL_CACHE = {}
+for size in range(1, 20):  # Common checker sizes
+    RECIPROCAL_CACHE[size] = SCALE // size if size > 0 else SCALE
+
 async def run(graphics, gu, state, interrupt_event):
     centre_x_scaled = int(((WIDTH - 1) / 2.0) * SCALE)
     centre_y_scaled = int(((HEIGHT - 1) / 2.0) * SCALE)
 
-    SIN_TABLE_SCALED = [int(s * SCALE) for s in SIN_TABLE]
-    COS_TABLE_SCALED = [int(c * SCALE) for c in COS_TABLE]
+    # Use pre-scaled tables (Item 19)
+    SIN_TABLE_SCALED = SIN_TABLE_PRESCALED
+    COS_TABLE_SCALED = COS_TABLE_PRESCALED
 
     def get_scaled_trig(angle, table):
         angle %= (2 * math.pi)
@@ -30,9 +40,18 @@ async def run(graphics, gu, state, interrupt_event):
         return table[idx % len(table)]
 
     def create_random_params():
-        h1, h2 = random.random(), (random.random() + 0.5) % 1.0
-        s1, s2 = random.uniform(0.8, 1.0), random.uniform(0.8, 1.0)
-        v1, v2 = random.uniform(0.7, 0.9), random.uniform(0.7, 0.9)
+        # Ensure distinct colors by guaranteeing hue separation and brightness contrast
+        h1 = random.random()
+        h2 = (h1 + random.uniform(0.4, 0.6)) % 1.0  # Ensure at least 40% hue separation
+        
+        # Ensure brightness contrast - one bright, one dim or vice versa
+        if random.choice([True, False]):
+            s1, s2 = random.uniform(0.9, 1.0), random.uniform(0.8, 1.0)
+            v1, v2 = random.uniform(0.8, 1.0), random.uniform(0.4, 0.6)  # Bright vs dim
+        else:
+            s1, s2 = random.uniform(0.8, 1.0), random.uniform(0.9, 1.0) 
+            v1, v2 = random.uniform(0.4, 0.6), random.uniform(0.8, 1.0)  # Dim vs bright
+        
         r1, g1, b1 = hsv_to_rgb(h1, s1, v1)
         r2, g2, b2 = hsv_to_rgb(h2, s2, v2)
         return {
@@ -57,21 +76,53 @@ async def run(graphics, gu, state, interrupt_event):
     def draw_pattern(params, start_x, end_x, zoom_scaled):
         if start_x >= end_x: return
 
+        # Pre-calculate transformation matrix once (Item 17)
         sin_angle = get_scaled_trig(params["angle_rad"], SIN_TABLE_SCALED)
         cos_angle = get_scaled_trig(params["angle_rad"], COS_TABLE_SCALED)
         size_scaled = params["checker_size"] * zoom_scaled
         if size_scaled < 1: size_scaled = 1
+        
+        # Optimize division with reciprocal multiplication (Item 18)
+        if size_scaled in RECIPROCAL_CACHE:
+            size_reciprocal = RECIPROCAL_CACHE[size_scaled]
+            use_reciprocal = True
+        else:
+            use_reciprocal = False
+        
+        # Pre-calculate scroll offsets (Item 17)
+        scroll_x_offset = params["scroll_x_scaled"]
+        scroll_y_offset = params["scroll_y_scaled"]
+        
+        # Pre-calculate common values (Item 17)
+        cos_div_scale = cos_angle // SCALE if cos_angle != 0 else 0
+        sin_div_scale = sin_angle // SCALE if sin_angle != 0 else 0
 
         for y in range(HEIGHT):
+            # Pre-calculate y-dependent values once per row (Item 17)
+            dy = y * SCALE - centre_y_scaled
+            dy_cos_component = dy * cos_angle
+            dy_sin_component = dy * sin_angle
+            
             for x in range(start_x, end_x):
                 dx = x * SCALE - centre_x_scaled
-                dy = y * SCALE - centre_y_scaled
 
-                rotated_x = (dx * cos_angle - dy * sin_angle) // SCALE + params["scroll_x_scaled"]
-                rotated_y = (dx * sin_angle + dy * cos_angle) // SCALE + params["scroll_y_scaled"]
+                # Use pre-calculated transformation matrix (Item 17)
+                rotated_x = (dx * cos_angle - dy_cos_component) // SCALE + scroll_x_offset
+                rotated_y = (dx * sin_angle + dy_sin_component) // SCALE + scroll_y_offset
 
-                checker_x = rotated_x // size_scaled
-                checker_y = rotated_y // size_scaled
+                # Optimize division operations (Item 18)
+                if use_reciprocal:
+                    # Use bit shifts for power-of-2 sizes or reciprocal multiplication
+                    if size_scaled & (size_scaled - 1) == 0:  # Power of 2
+                        shift_amount = size_scaled.bit_length() - 1
+                        checker_x = rotated_x >> shift_amount
+                        checker_y = rotated_y >> shift_amount
+                    else:
+                        checker_x = (rotated_x * size_reciprocal) >> 10  # Approximate division
+                        checker_y = (rotated_y * size_reciprocal) >> 10
+                else:
+                    checker_x = rotated_x // size_scaled
+                    checker_y = rotated_y // size_scaled
 
                 pen = params["pen2"] if (checker_x + checker_y) % 2 == 0 else params["pen1"]
                 graphics.set_pen(pen)
@@ -122,4 +173,4 @@ async def run(graphics, gu, state, interrupt_event):
                 last_change_time_s = current_time_s
 
         gu.update(graphics)
-        await uasyncio.sleep_ms(10)
+        await uasyncio.sleep(0.01)  # 10ms = 0.01s

@@ -39,7 +39,7 @@ async def shrivel_and_pulse_loser(graphics, gu, winner_snake, loser_snake, t, du
         # Draw loser snake, faded
         fade = max(0.0, 1.0 - i / steps)
         for j, (x, y) in enumerate(loser_body):
-            r, g, b = hsv_to_rgb(h_lose, s_lose, v_lose * fade * 0.5)
+            r, g, b = hsv_to_rgb(h_lose, s_lose, max(0.0, min(1.0, v_lose * fade * 0.5)))
             graphics.set_pen(graphics.create_pen(r, g, b))
             graphics.pixel(x, y)
         # Draw winner snake, pulsing
@@ -47,10 +47,10 @@ async def shrivel_and_pulse_loser(graphics, gu, winner_snake, loser_snake, t, du
         for j, (x, y) in enumerate(winner_body):
             if winner_snake.is_powered() and j >= 2:
                 hue = (t * 0.5 + j / max(1, len(winner_body))) % 1.0
-                r, g, b = hsv_to_rgb(hue, 1.0, pulse)
+                r, g, b = hsv_to_rgb(hue, 1.0, max(0.0, min(1.0, pulse)))
             else:
                 fade_win = 1.0 - (j / max(1, len(winner_body)))
-                r, g, b = hsv_to_rgb(h_win, s_win, v_win * fade_win * pulse)
+                r, g, b = hsv_to_rgb(h_win, s_win, max(0.0, min(1.0, v_win * fade_win * pulse)))
             graphics.set_pen(graphics.create_pen(r, g, b))
             graphics.pixel(x, y)
         gu.update(graphics)
@@ -254,7 +254,7 @@ async def run(graphics, gu, state, interrupt_event):
                     r, g, b = hsv_to_rgb(hue, 1.0, 1.0)
                 else:
                     fade = 1.0 - (i / max(1, len(snake.body)))
-                    r, g, b = hsv_to_rgb(h, s, v * fade)
+                    r, g, b = hsv_to_rgb(h, s, max(0.0, min(1.0, v * fade)))
                 graphics.set_pen(graphics.create_pen(r, g, b))
                 graphics.pixel(x, y)
 

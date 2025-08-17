@@ -15,6 +15,8 @@ async def run(graphics, gu, state, interrupt_event):
     
     SPEED_MULTIPLIER = 0.7
     NUM_BOIDS = 30
+    
+    # Note: Creating pens dynamically as set_rgb method doesn't exist
 
     trail_buffer = [
         [(0, 0, 0) for _ in range(HEIGHT)] for _ in range(WIDTH)
@@ -126,7 +128,8 @@ async def run(graphics, gu, state, interrupt_event):
                 trail_buffer[ix][iy] = (new_r, new_g, new_b)
 
         def draw_boid(self):
-            graphics.set_pen(graphics.create_pen(self.r, self.g, self.b))
+            boid_pen = graphics.create_pen(int(self.r), int(self.g), int(self.b))
+            graphics.set_pen(boid_pen)
             graphics.pixel(int(self.x), int(self.y))
 
     boids = [Boid() for _ in range(NUM_BOIDS)]
@@ -147,7 +150,8 @@ async def run(graphics, gu, state, interrupt_event):
             for y in range(HEIGHT):
                 r, g, b = trail_buffer[x][y]
                 if r > 0 or g > 0 or b > 0:
-                    graphics.set_pen(graphics.create_pen(r, g, b))
+                    trail_pen = graphics.create_pen(r, g, b)
+                    graphics.set_pen(trail_pen)
                     graphics.pixel(x, y)
 
         for boid in boids:

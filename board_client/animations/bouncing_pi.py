@@ -116,10 +116,11 @@ async def run(graphics, gu, state, interrupt_event):
             if prev_x != x or prev_y != y:  # Only if pi moved
                 _draw_pi(graphics, prev_x, prev_y, black_pen)
             
-            # Draw normal fading trail
-            for i, (trail_x, trail_y) in enumerate(trail):
+            # Draw normal fading trail - convert deque to list for MicroPython compatibility
+            trail_list = list(trail)
+            for i, (trail_x, trail_y) in enumerate(trail_list):
                 # Fade the trail out
-                v = BRIGHTNESS_FALLOFF ** (len(trail) - i)
+                v = BRIGHTNESS_FALLOFF ** (len(trail_list) - i)
                 r, g, b = hsv_to_rgb(hue, 1.0, v)
                 trail_pen = graphics.create_pen(r, g, b)
                 _draw_pi(graphics, trail_x, trail_y, trail_pen)

@@ -31,9 +31,17 @@ async def run(graphics, gu, state, interrupt_event):
         return table[idx % len(table)]
 
     def create_random_params():
-        h1, h2 = random.random(), (random.random() + 0.5) % 1.0
-        s1, s2 = random.uniform(0.8, 1.0), random.uniform(0.8, 1.0)
-        v1, v2 = random.uniform(0.7, 0.9), random.uniform(0.7, 0.9)
+        # Ensure distinct colors by guaranteeing hue separation and brightness contrast
+        h1 = random.random()
+        h2 = (h1 + random.uniform(0.4, 0.6)) % 1.0  # Ensure at least 40% hue separation
+        
+        # Ensure brightness contrast - one bright, one dim or vice versa
+        if random.choice([True, False]):
+            s1, s2 = random.uniform(0.9, 1.0), random.uniform(0.8, 1.0)
+            v1, v2 = random.uniform(0.8, 1.0), random.uniform(0.4, 0.6)  # Bright vs dim
+        else:
+            s1, s2 = random.uniform(0.8, 1.0), random.uniform(0.9, 1.0) 
+            v1, v2 = random.uniform(0.4, 0.6), random.uniform(0.8, 1.0)  # Dim vs bright
         return {
             "hsv1": (h1, s1, v1),
             "hsv2": (h2, s2, v2),
