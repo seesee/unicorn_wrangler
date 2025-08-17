@@ -20,6 +20,8 @@ async def run(graphics, gu, state, interrupt_event):
     ROTATION_SPEED_MAX = 0.08
     SCALE_SPEED_MAX = 0.03
     CIRCLE_SEGMENTS = 10
+    
+    # Note: Creating pens dynamically as set_rgb method doesn't exist
 
     class Shape:
         def __init__(self, shape_type=None):
@@ -100,7 +102,8 @@ async def run(graphics, gu, state, interrupt_event):
         def draw(self, t):
             h = (self.hue + t * 0.05) % 1.0
             r, g, b = hsv_to_rgb(h, 1.0, 1.0)
-            graphics.set_pen(graphics.create_pen(r, g, b))
+            shape_pen = graphics.create_pen(int(r), int(g), int(b))
+            graphics.set_pen(shape_pen)
             points = []
             if self.type == "circle":
                 size = self.radius
@@ -157,6 +160,9 @@ async def run(graphics, gu, state, interrupt_event):
     num_remaining = min(num_remaining, MAX_SHAPES - len(shapes))
     for _ in range(max(0, num_remaining)):
         shapes.append(Shape())
+    
+    # Pre-allocate black pen for clearing
+    black_pen = graphics.create_pen(0, 0, 0)
 
     t = 0
 
@@ -199,7 +205,7 @@ async def run(graphics, gu, state, interrupt_event):
                         s2.vx *= COLLISION_ELASTICITY
                         s2.vy *= COLLISION_ELASTICITY
 
-        graphics.set_pen(graphics.create_pen(0, 0, 0))
+        graphics.set_pen(black_pen)
         graphics.clear()
         for shape in shapes:
             shape.draw(t)

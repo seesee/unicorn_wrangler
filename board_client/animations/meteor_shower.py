@@ -88,7 +88,7 @@ class Glow:
                     py = self.y + dy
                     if 0 <= px < WIDTH and 0 <= py < HEIGHT:
                         local_fade = max(0.0, 1.0 - dist / (self.radius + 0.5))
-                        r, g, b = hsv_to_rgb(0.07, 0.8, brightness * local_fade)
+                        r, g, b = hsv_to_rgb(0.07, 0.8, max(0.0, min(1.0, brightness * local_fade)))
                         graphics.set_pen(graphics.create_pen(r, g, b))
                         graphics.pixel(px, py)
 
@@ -148,7 +148,7 @@ async def run(graphics, gu, state, interrupt_event):
                 fade = max(0.0, 1.0 - i / self.length)
                 # Slight hue shift for trail
                 hue = (h + 0.01 * i) % 1.0
-                r, g, b = hsv_to_rgb(hue, s, fade * self.brightness * v)
+                r, g, b = hsv_to_rgb(hue, s, max(0.0, min(1.0, fade * self.brightness * v)))
                 if 0 <= px < WIDTH and 0 <= py < HEIGHT:
                     graphics.set_pen(graphics.create_pen(r, g, b))
                     graphics.pixel(px, py)

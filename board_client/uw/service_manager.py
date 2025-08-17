@@ -14,6 +14,7 @@ STATUS_CONNECTING = "connecting"
 STATUS_ON = "on"
 STATUS_FAIL = "fail"
 STATUS_ENABLED = "enabled"
+STATUS_CONNECTED_PENDING = "connected_pending"  # Connected but waiting for final confirmation
 
 # Keep track of service status
 service_status = {
@@ -26,6 +27,26 @@ service_status = {
 # Track startup phase to prevent grid updates during normal operation
 startup_complete = False
 mqtt_connection_attempted = False
+mqtt_ever_connected = False  # Track if MQTT has ever connected successfully
+streaming_actually_working = False  # Track if streaming animations are actually working
+
+def mqtt_status_callback(service_name, status_key):
+    """Callback function for MQTT service to update status"""
+    global startup_complete, mqtt_ever_connected
+    if service_name == "mqtt":
+        if status_key == "connected_pending":
+            service_status["mqtt"] = STATUS_CONNECTED_PENDING
+            mqtt_ever_connected = True  # Mark that MQTT has connected successfully
+            if not startup_complete:
+                draw_startup_grid()
+
+def mark_streaming_working():
+    """Called by animations to indicate streaming is actually working"""
+    global streaming_actually_working
+    if not streaming_actually_working:
+        streaming_actually_working = True
+        service_status["streaming"] = STATUS_ON
+        log("Streaming confirmed working by animation - stopping background retries", "INFO")
 
 def draw_startup_grid():
     WIDTH, HEIGHT = graphics.get_bounds()
@@ -37,6 +58,8 @@ def draw_startup_grid():
             return (255, 0, 0)  # Red
         elif status == STATUS_CONNECTING:
             return (255, 255, 0)  # Yellow
+        elif status == STATUS_CONNECTED_PENDING:
+            return (0, 255, 255)  # Cyan - connected but pending final confirmation
         elif status == STATUS_ENABLED:
             return (0, 0, 255)  # Blue
         else:  # off
@@ -66,9 +89,14 @@ def draw_startup_grid():
     gu.update(graphics)
 
 async def _retry_service(service_name, connect_func, *args):
-    global startup_complete
+    global startup_complete, streaming_actually_working
     retry_interval = config.get(service_name, "retry_interval_s", 45)
     while True:
+        # For streaming service, stop retrying if streaming is actually working
+        if service_name == "streaming" and streaming_actually_working:
+            log("Stopping streaming service retries - streaming confirmed working by animation", "INFO")
+            break
+            
         log(f"Retrying {service_name} connection...", "INFO")
         try:
             result = await connect_func(*args)
@@ -137,36 +165,47 @@ async def initialise_services():
         draw_startup_grid()
         await uasyncio.sleep_ms(200)  # Show WiFi result
 
-    # --- Quick service attempts during startup phase ---
-    services_to_start = []
+    # --- Sequential service attempts during startup phase ---
+    # Order: WiFi (already done), NTP, Streaming, then MQTT last
     
-    # Start all enabled services with startup attempts
+    # Start NTP sync
     if config.get("general", "ntp_enable", True):
-        services_to_start.append(_startup_ntp_sync())
-    
-    if config.get("mqtt", "enable", False):
-        services_to_start.append(_startup_mqtt_connect())
-    
-    if config.get("streaming", "enable", False):
-        services_to_start.append(_startup_streaming_connect())
-    
-    # Run all service startup attempts concurrently
-    if services_to_start:
-        await uasyncio.gather(*services_to_start, return_exceptions=True)
+        await _startup_ntp_sync()
         draw_startup_grid()
-
-    # Show final startup grid for remaining time
-    elapsed = time.ticks_diff(time.ticks_ms(), start_time)
-    remaining = max(0, 3000 - elapsed)
-    if remaining > 0:
-        await uasyncio.sleep_ms(remaining)
+        await uasyncio.sleep_ms(100)  # Brief delay to show status
     
+    # Start streaming connection check
+    if config.get("streaming", "enable", False):
+        await _startup_streaming_connect()
+        draw_startup_grid()
+        await uasyncio.sleep_ms(100)  # Brief delay to show status
+    
+    # Start MQTT connection last to avoid blocking other services
+    if config.get("mqtt", "enable", False):
+        log("Starting MQTT connection during startup", "DEBUG")
+        await _startup_mqtt_connect()
+        log("MQTT startup connection completed", "DEBUG")
+
+    # Show final startup grid with all final statuses
+    log("Drawing final startup grid", "DEBUG")
+    draw_startup_grid()
+    
+    # Show final startup grid briefly to display final statuses (including green MQTT)
+    elapsed = time.ticks_diff(time.ticks_ms(), start_time)
+    remaining = max(0, min(300, 3000 - elapsed))  # Cap at 300ms max to avoid long delays
+    final_display_time = max(150, min(remaining, 300))  # Ensure at least 150ms to see final status
+    log(f"Startup elapsed: {elapsed}ms, showing final grid for {final_display_time}ms", "DEBUG")
+    await uasyncio.sleep_ms(final_display_time)
+    
+    log("Setting startup_complete = True", "DEBUG")
     startup_complete = True
     
     # Clear the screen and proceed to animations
+    log("Clearing screen and completing startup", "DEBUG")
     graphics.set_pen(graphics.create_pen(0, 0, 0))
     graphics.clear()
     gu.update(graphics)
+    log("Startup sequence completed successfully", "INFO")
 
 async def _background_wifi_connect():
     """Background WiFi connection with retries"""
@@ -176,12 +215,37 @@ async def _background_wifi_connect():
                 service_status["wifi"] = STATUS_ON
                 state.wifi_connected = True
                 log("WiFi connected in background", "INFO")
+                
+                # Now that WiFi is connected, start other background services
+                await _trigger_background_services()
                 break
         except Exception as e:
             log(f"Background WiFi connection failed: {e}", "WARN")
             
         service_status["wifi"] = STATUS_FAIL
         await uasyncio.sleep(45)  # Retry every 45 seconds
+
+async def _trigger_background_services():
+    """Trigger background services when WiFi connects late"""
+    global streaming_actually_working
+    log("Triggering background services after late WiFi connection", "INFO")
+    
+    # Start NTP sync if enabled and not already running
+    if config.get("general", "ntp_enable", True) and service_status["ntp"] != STATUS_ON:
+        log("Starting background NTP sync", "INFO")
+        uasyncio.create_task(_background_ntp_sync())
+    
+    # Start streaming check if enabled, not already running, and not confirmed working
+    if (config.get("streaming", "enable", False) and 
+        service_status["streaming"] != STATUS_ON and 
+        not streaming_actually_working):
+        log("Starting background streaming check", "INFO")
+        uasyncio.create_task(_background_streaming_connect())
+    
+    # Start MQTT if enabled and not already attempted
+    if config.get("mqtt", "enable", False) and not mqtt_connection_attempted:
+        log("Starting background MQTT connection", "INFO")
+        uasyncio.create_task(_background_mqtt_connect_late())
 
 async def _startup_ntp_sync():
     """NTP sync attempt during startup phase"""
@@ -230,69 +294,104 @@ async def _startup_mqtt_connect():
     if not state.wifi_connected:
         service_status["mqtt"] = STATUS_OFF
         return
-    
-    # Only attempt MQTT connection once, ever
-    if mqtt_connection_attempted:
-        return
         
     service_status["mqtt"] = STATUS_CONNECTING
     draw_startup_grid()
     
     try:
-        # Set flag only after we actually attempt the connection
+        log("Creating MQTT service", "DEBUG")
         mqtt_connection_attempted = True
-        mqtt_service = MQTTService()
+        mqtt_service = MQTTService(status_callback=mqtt_status_callback)
         state.mqtt_service = mqtt_service
         
-        # Start the MQTT service loop in background
-        uasyncio.create_task(mqtt_service.loop())
-        
-        # Give it a shorter time during startup to show status quickly
-        connected = False
-        for _ in range(10):  # 1 second maximum during startup
-            if mqtt_service.connected:
-                connected = True
-                break
-            await uasyncio.sleep_ms(100)
+        # Try to connect once during startup
+        log("Attempting MQTT connection", "DEBUG")
+        connected = mqtt_service.connect()
+        log(f"MQTT connection result: {connected}", "DEBUG")
         
         if connected:
+            log("MQTT connected, setting status to ON", "DEBUG")
             service_status["mqtt"] = STATUS_ON
-            log("MQTT connected during startup - no further reconnection attempts", "INFO")
+            mqtt_ever_connected = True  # Mark that MQTT has connected successfully
+            log("MQTT connected during startup", "INFO")
+            # Start the MQTT service loop for message handling
+            log("Starting MQTT message loop", "DEBUG")
+            uasyncio.create_task(mqtt_service.loop())
+            log("MQTT startup success path completed", "DEBUG")
         else:
-            service_status["mqtt"] = STATUS_CONNECTING  # Still trying in background
-            log("MQTT still connecting in background", "INFO")
-            # Continue trying in background
-            uasyncio.create_task(_background_mqtt_finish())
+            log("MQTT connection failed, setting status to FAIL", "DEBUG")
+            service_status["mqtt"] = STATUS_FAIL
+            log("MQTT failed during startup, will retry in background", "INFO")
+            # Start background retry task
+            service_status["mqtt"] = STATUS_CONNECTING  # Change back to connecting for background
+            uasyncio.create_task(_background_mqtt_retry())
+            log("MQTT failure path completed", "DEBUG")
             
     except Exception as e:
         log(f"MQTT setup failed during startup: {e}", "ERROR")
         service_status["mqtt"] = STATUS_FAIL
-        state.mqtt_service = None
+        # Start background retry task
+        service_status["mqtt"] = STATUS_CONNECTING  # Change back to connecting for background
+        uasyncio.create_task(_background_mqtt_retry())
+        log("MQTT exception path completed", "DEBUG")
 
-async def _background_mqtt_finish():
-    """Finish MQTT connection attempt in background"""
-    if not state.mqtt_service:
-        return
-        
-    # Continue monitoring for connection for a bit longer
-    connected = False
-    for _ in range(20):  # Another 2 seconds in background
-        if state.mqtt_service.connected:
-            connected = True
-            break
-        await uasyncio.sleep_ms(100)
+async def _background_mqtt_retry():
+    """Background MQTT retry until first successful connection"""
+    global mqtt_ever_connected
+    retry_interval = 10  # Retry every 10 seconds
     
-    if connected:
-        service_status["mqtt"] = STATUS_ON
-        log("MQTT connected in background - no further reconnection attempts", "INFO")
-    else:
-        service_status["mqtt"] = STATUS_FAIL
-        log("MQTT connection failed - will not retry to avoid blocking", "WARN")
-        state.mqtt_service = None
+    while not mqtt_ever_connected:
+        # Wait for WiFi if not connected
+        if not state.wifi_connected:
+            await uasyncio.sleep(1)
+            continue
+            
+        log("Retrying MQTT connection...", "INFO")
+        service_status["mqtt"] = STATUS_CONNECTING
+        
+        try:
+            # Create new MQTT service if needed
+            if not state.mqtt_service:
+                mqtt_service = MQTTService(status_callback=mqtt_status_callback)
+                state.mqtt_service = mqtt_service
+            
+            # Try to connect
+            connected = state.mqtt_service.connect()
+            
+            if connected:
+                service_status["mqtt"] = STATUS_ON
+                mqtt_ever_connected = True  # Set the flag to stop retries
+                log("MQTT connected successfully - no further reconnection attempts will be made", "INFO")
+                # Start the MQTT service loop for message handling
+                uasyncio.create_task(state.mqtt_service.loop())
+                break
+            else:
+                service_status["mqtt"] = STATUS_FAIL
+                log(f"MQTT connection failed. Retrying in {retry_interval}s.", "WARN")
+                await uasyncio.sleep(retry_interval)
+                
+        except Exception as e:
+            service_status["mqtt"] = STATUS_FAIL
+            log(f"MQTT connection error: {e}. Retrying in {retry_interval}s.", "WARN")
+            await uasyncio.sleep(retry_interval)
+    
+    log("MQTT retry loop ended - connection was successful", "INFO")
 
 async def _background_mqtt_connect():
     """Legacy function - now handled by startup flow"""
     pass
+
+async def _background_mqtt_connect_late():
+    """MQTT connection when WiFi connects after startup"""
+    global mqtt_connection_attempted, mqtt_ever_connected
+    
+    # Only start if MQTT has never connected and we haven't started trying yet
+    if mqtt_connection_attempted or mqtt_ever_connected:
+        return
+        
+    log("Starting MQTT connection attempts after late WiFi connection", "INFO")
+    mqtt_connection_attempted = True
+    uasyncio.create_task(_background_mqtt_retry())
 
 async def _startup_streaming_connect():
     """Streaming connection check during startup phase"""

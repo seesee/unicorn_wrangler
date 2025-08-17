@@ -24,6 +24,9 @@ async def run_named_animation(animation_name, max_runtime_s):
     # load and run a random animation for up to max_runtime_s seconds, interruptible
     state.animation_active = True
     state.interrupt_event.clear()
+    
+    # Set max_runtime_s on state so animations can access it (especially for --duration override)
+    state.max_runtime_s = max_runtime_s
 
     # fixes an animation to loop indefinitely when set. Used for onair.
     if state.next_animation:

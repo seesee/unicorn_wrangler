@@ -107,10 +107,11 @@ async def run_bouncing_datetime(graphics, gu, state, interrupt_event):
         graphics.set_pen(black_pen)
         graphics.clear()
 
-        # Draw trailing time displays with fade
-        for i, (trail_x, trail_y) in enumerate(trail):
+        # Draw trailing time displays with fade - convert deque to list for MicroPython
+        trail_list = list(trail)
+        for i, (trail_x, trail_y) in enumerate(trail_list):
             # Fade the trail out
-            v = BRIGHTNESS_FALLOFF ** (len(trail) - i)
+            v = BRIGHTNESS_FALLOFF ** (len(trail_list) - i)
             r, g, b = hsv_to_rgb(hue, 1.0, v)
             trail_pen = graphics.create_pen(r, g, b)
             graphics.set_pen(trail_pen)
