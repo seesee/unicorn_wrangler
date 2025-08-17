@@ -116,8 +116,15 @@ class UniversalObjectPool:
                 self.available.append(obj)
     
     def release_all(self):
-        self.available.extend(self.in_use[:self.max_size - len(self.available)])
-        self.in_use.clear()
+        space = max(0, self.max_size - len(self.available))
+        if space > 0:
+            moved = self.in_use[:space]
+            self.available.extend(moved)
+            # Remove the moved objects from in_use
+            self.in_use = self.in_use[space:]
+        else:
+            # No space available, just clear in_use (objects are discarded)
+            self.in_use.clear()
 
 # Item 51: Color depth reduction using 6-6-6 RGB palette quantization
 COLOR_PALETTE_666 = []
