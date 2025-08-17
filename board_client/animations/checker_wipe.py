@@ -20,10 +20,7 @@ SCALE = 1024
 SIN_TABLE_PRESCALED = [int(s * SCALE) for s in SIN_TABLE]
 COS_TABLE_PRESCALED = [int(c * SCALE) for c in COS_TABLE]
 
-# Pre-computed reciprocals for division optimization (Item 18)
-RECIPROCAL_CACHE = {}
-for size in range(1, 20):  # Common checker sizes
-    RECIPROCAL_CACHE[size] = SCALE // size if size > 0 else SCALE
+# Fixed-point reciprocal optimization (Item 18) - removed cache as it was never hit
 
 async def run(graphics, gu, state, interrupt_event):
     centre_x_scaled = int(((WIDTH - 1) / 2.0) * SCALE)
@@ -82,12 +79,9 @@ async def run(graphics, gu, state, interrupt_event):
         size_scaled = params["checker_size"] * zoom_scaled
         if size_scaled < 1: size_scaled = 1
         
-        # Optimize division with reciprocal multiplication (Item 18)
-        if size_scaled in RECIPROCAL_CACHE:
-            size_reciprocal = RECIPROCAL_CACHE[size_scaled]
-            use_reciprocal = True
-        else:
-            use_reciprocal = False
+        # For now, revert to simple division as fixed-point math needs more precision
+        # The performance gain isn't worth the complexity for this specific case
+        use_reciprocal = False
         
         # Pre-calculate scroll offsets (Item 17)
         scroll_x_offset = params["scroll_x_scaled"]
@@ -110,16 +104,10 @@ async def run(graphics, gu, state, interrupt_event):
                 rotated_x = (dx * cos_angle - dy_cos_component) // SCALE + scroll_x_offset
                 rotated_y = (dx * sin_angle + dy_sin_component) // SCALE + scroll_y_offset
 
-                # Optimize division operations (Item 18)
+                # Optimize division operations with fixed-point reciprocal (Item 18)
                 if use_reciprocal:
-                    # Use bit shifts for power-of-2 sizes or reciprocal multiplication
-                    if size_scaled & (size_scaled - 1) == 0:  # Power of 2
-                        shift_amount = size_scaled.bit_length() - 1
-                        checker_x = rotated_x >> shift_amount
-                        checker_y = rotated_y >> shift_amount
-                    else:
-                        checker_x = (rotated_x * size_reciprocal) >> 10  # Approximate division
-                        checker_y = (rotated_y * size_reciprocal) >> 10
+                    checker_x = (rotated_x * size_reciprocal) >> SHIFT_BITS
+                    checker_y = (rotated_y * size_reciprocal) >> SHIFT_BITS
                 else:
                     checker_x = rotated_x // size_scaled
                     checker_y = rotated_y // size_scaled

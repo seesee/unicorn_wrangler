@@ -73,28 +73,29 @@ CURTAINS = [curtain_params(prng, HEIGHT) for _ in range(3)]
 for c in CURTAINS:
     log(c, "DEBUG")
 
-# Pre-calculated noise lookup table for common patterns (Item 7)
-NOISE_TABLE_SIZE = 512
+# Pre-calculated noise lookup table covering all x,y combinations (CR fix)
+NOISE_TABLE_SIZE = 1024  # 32x32 = 1024 entries for all x,y combos
 NOISE_TABLE = []
 for i in range(NOISE_TABLE_SIZE):
-    x, y, t = i & 0x1F, (i >> 5) & 0x1F, (i >> 10) & 0x3
-    t1 = t
-    t2 = t
-    n1 = (((x * 13 + y * 17 + t1 * 23) & 0x7) - 4) // 2
-    n2 = (((x * 7 + y * 11 + t2 * 19) & 0x3) - 2)
+    x, y = i & 0x1F, (i >> 5) & 0x1F  # Remove t from precomputation
+    # Use t=0 baseline for lookup table
+    n1 = (((x * 13 + y * 17) & 0x7) - 4) // 2
+    n2 = (((x * 7 + y * 11) & 0x3) - 2)
     NOISE_TABLE.append(n1 + n2)
 
 def hash_noise(x, y, t):
-    # Use lookup table for common noise patterns
-    idx = (x & 0x1F) | ((y & 0x1F) << 5) | ((t & 0x3) << 10)
-    if idx < NOISE_TABLE_SIZE:
-        return NOISE_TABLE[idx]
-    # Fallback for edge cases
-    t1 = t // 6
-    t2 = t // 11
-    n1 = (((x * 13 + y * 17 + t1 * 23) & 0x7) - 4) // 2
-    n2 = (((x * 7 + y * 11 + t2 * 19) & 0x3) - 2)
-    return n1 + n2
+    # Use lookup table for x,y patterns with time variance when needed
+    xy_idx = (x & 0x1F) | ((y & 0x1F) << 5)
+    base_noise = NOISE_TABLE[xy_idx]  # Always valid now
+    
+    # Add time variance for animated effects (only when t != 0)
+    if t & 0x3:  # Only add time cost when t changes significantly
+        t1 = t // 6
+        t2 = t // 11
+        time_noise = (((t1 * 23) & 0x3) - 1) + (((t2 * 19) & 0x1) - 1)
+        return base_noise + time_noise
+    
+    return base_noise
 
 async def run(graphics, gu, state, interrupt_event):
     frame = 0

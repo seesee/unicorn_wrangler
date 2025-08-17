@@ -261,7 +261,9 @@ def get_memory_info():
             'free': gc.mem_free(),
             'allocated': gc.mem_alloc()
         }
-    except:
+    except Exception as e:
+        # Only catch non-system-exiting exceptions
+        # Could add logging here if needed: log(f"Memory info unavailable: {e}", "DEBUG")
         return {'free': 0, 'allocated': 0}
 
 class uwPrng:
