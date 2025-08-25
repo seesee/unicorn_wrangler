@@ -51,14 +51,24 @@ async def run(graphics, gu, state, interrupt_event):
         
         r1, g1, b1 = hsv_to_rgb(h1, s1, v1)
         r2, g2, b2 = hsv_to_rgb(h2, s2, v2)
+        
+        # Choose relief direction for this entire slide (consistent across all checkers)
+        slide_relief_inverted = random.choice([True, False])
+        # Choose edge style for this entire slide
+        slide_edge_style = random.randint(0, 9)  # 0-9 for consistent edge width per slide
+        
         return {
             "pen1": graphics.create_pen(r1, g1, b1),
             "pen2": graphics.create_pen(r2, g2, b2),
+            "base_color1": (r1, g1, b1),  # Store base colors for bas relief calculation
+            "base_color2": (r2, g2, b2),
             "checker_size": random.randint(4, 9),
             "rotation_speed": random.uniform(0.1, 0.5),
             "scroll_x_scaled": 0,
             "scroll_y_scaled": 0,
             "angle_rad": 0.0,
+            "slide_relief_inverted": slide_relief_inverted,  # Same relief direction for entire slide
+            "slide_edge_style": slide_edge_style,  # Same edge style for entire slide
         }
 
     def update_pattern_state(params, delta_t_s, zoom_scaled):
@@ -112,7 +122,67 @@ async def run(graphics, gu, state, interrupt_event):
                     checker_x = rotated_x // size_scaled
                     checker_y = rotated_y // size_scaled
 
-                pen = params["pen2"] if (checker_x + checker_y) % 2 == 0 else params["pen1"]
+                is_color2 = (checker_x + checker_y) % 2 == 0
+                
+                # Apply bas relief effect to both colors
+                if is_color2:
+                    base_r, base_g, base_b = params["base_color2"]
+                else:
+                    base_r, base_g, base_b = params["base_color1"]
+                
+                # Calculate position within current checker square for lighting
+                local_x = (rotated_x % size_scaled) / size_scaled  # 0.0 to 1.0 within square
+                local_y = (rotated_y % size_scaled) / size_scaled
+                
+                # Use slide-consistent relief direction and edge style
+                relief_inverted = params["slide_relief_inverted"]  # Same for entire slide
+                falloff_type = params["slide_edge_style"]  # Same for entire slide
+                
+                # Determine edge width based on falloff type
+                if falloff_type < 3:  # 30% - Sharp edges (1 pixel wide)
+                    edge_width = 1.0 / max(1, size_scaled // SCALE)  # 1 pixel worth
+                elif falloff_type < 6:  # 30% - Medium edges 
+                    edge_width = 2.0 / max(1, size_scaled // SCALE)  # 2 pixels worth
+                else:  # 40% - Soft edges
+                    edge_width = 3.0 / max(1, size_scaled // SCALE)  # 3 pixels worth
+                
+                # Calculate distance from edges (0.0 = at edge, 0.5 = center)
+                edge_dist_x = min(local_x, 1.0 - local_x)  # Distance from left/right edges
+                edge_dist_y = min(local_y, 1.0 - local_y)  # Distance from top/bottom edges
+                edge_dist = min(edge_dist_x, edge_dist_y)   # Distance from nearest edge
+                
+                # Default to flat center color
+                brightness = 1.0
+                
+                # Apply edge lighting only near edges
+                if edge_dist < edge_width:
+                    # We're near an edge - determine which edge for lighting direction
+                    at_top = local_y < edge_width
+                    at_bottom = local_y > 1.0 - edge_width
+                    at_left = local_x < edge_width  
+                    at_right = local_x > 1.0 - edge_width
+                    
+                    # Calculate edge lighting based on which edge we're near
+                    if relief_inverted:
+                        # Inverted: brighten top/right edges, darken bottom/left edges
+                        if at_top or at_right:
+                            brightness = 1.0 + 0.7 * (1.0 - edge_dist / edge_width)  # Bright edges
+                        elif at_bottom or at_left:
+                            brightness = 1.0 - 0.7 * (1.0 - edge_dist / edge_width)  # Dark edges
+                    else:
+                        # Normal: darken top/right edges, brighten bottom/left edges  
+                        if at_top or at_right:
+                            brightness = 1.0 - 0.7 * (1.0 - edge_dist / edge_width)  # Dark edges
+                        elif at_bottom or at_left:
+                            brightness = 1.0 + 0.7 * (1.0 - edge_dist / edge_width)  # Bright edges
+                
+                # Apply lighting with bounds checking
+                lit_r = max(0, min(255, int(base_r * brightness)))
+                lit_g = max(0, min(255, int(base_g * brightness)))
+                lit_b = max(0, min(255, int(base_b * brightness)))
+                
+                pen = graphics.create_pen(lit_r, lit_g, lit_b)
+                
                 graphics.set_pen(pen)
                 graphics.pixel(x, y)
 

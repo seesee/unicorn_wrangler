@@ -131,7 +131,7 @@ async def run(graphics, gu, state, interrupt_event):
             # This creates persistent trails since we don't clear the screen
             if prev_x != x or prev_y != y:  # Only draw trail if pi actually moved
                 trail_hue = rainbow_time % 1.0
-                r, g, b = hsv_to_rgb(trail_hue, 0.7, 0.4)  # Dim persistent trail
+                r, g, b = hsv_to_rgb(trail_hue, 0.7, 0.08)  # Much dimmer persistent trail like meteor_shower
                 trail_pen = graphics.create_pen(r, g, b)
                 _draw_pi(graphics, prev_x, prev_y, trail_pen)
             

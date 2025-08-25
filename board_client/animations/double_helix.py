@@ -165,10 +165,11 @@ async def run(graphics, gu, state, interrupt_event):
     
     # Animation state
     time = 0.0
-    rotation_speed = 0.12
-    camera_orbit_speed = 0.08
-    camera_tilt_speed = 0.05
-    zoom_speed = 0.06
+    rotation_speed = 0.06  # Slower for simulator
+    camera_orbit_speed = 0.04
+    camera_tilt_speed = 0.025
+    zoom_speed = 0.03
+    corkscrew_speed = 0.08  # Much slower corkscrew
     
     # Base parameters - model-specific zoom
     if MODEL == "galactic":
@@ -188,11 +189,14 @@ async def run(graphics, gu, state, interrupt_event):
         camera_orbit = fast_sin(time * camera_orbit_speed) * 1.2
         camera_tilt = fast_sin(time * camera_tilt_speed) * 0.6
         zoom = base_zoom * (1.0 + 0.2 * fast_sin(time * zoom_speed))
+        corkscrew_twist = time * corkscrew_speed
         
-        # Transform all geometry
+        # Transform all geometry with uniform corkscrew rotation
         transformed_lines = []
         for line in helix_lines:
-            t_line = line.transform(camera_tilt, camera_orbit, helix_rotation)
+            # Apply corkscrew as an additional Z-axis rotation to the entire helix
+            total_z_rotation = helix_rotation + corkscrew_twist
+            t_line = line.transform(camera_tilt, camera_orbit, total_z_rotation)
             transformed_lines.append(t_line)
         
         # Project and draw lines only (no individual points for better performance)
