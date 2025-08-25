@@ -70,6 +70,27 @@ class GraphicsSim:
                 err += dx
                 y += sy
 
+    def rectangle(self, x, y, width, height):
+        """Draw a filled rectangle."""
+        x, y, width, height = int(x), int(y), int(width), int(height)
+        for dx in range(width):
+            for dy in range(height):
+                px = x + dx
+                py = y + dy
+                if 0 <= px < WIDTH and 0 <= py < HEIGHT:
+                    self.buffer[px][py] = self.current_pen
+
+    def circle(self, x, y, radius):
+        """Draw a filled circle."""
+        x, y, radius = int(x), int(y), int(radius)
+        for dx in range(-radius, radius + 1):
+            for dy in range(-radius, radius + 1):
+                if dx * dx + dy * dy <= radius * radius:
+                    px = x + dx
+                    py = y + dy
+                    if 0 <= px < WIDTH and 0 <= py < HEIGHT:
+                        self.buffer[px][py] = self.current_pen
+
 class GUISim:
     def __init__(self, graphics):
         self.graphics = graphics

@@ -22,6 +22,7 @@ ANIMATION_LIST = get_animation_list()
 
 async def run_named_animation(animation_name, max_runtime_s):
     # load and run a random animation for up to max_runtime_s seconds, interruptible
+    # Returns True if animation ran successfully, False if it failed to load or had an error
     state.animation_active = True
     state.interrupt_event.clear()
     
@@ -47,8 +48,9 @@ async def run_named_animation(animation_name, max_runtime_s):
     except Exception as e:
         log(f"Failed to load animation {animation_name}: {e}", "ERROR")
         state.animation_active = False
-        return
+        return False
 
+    success = True
     task = uasyncio.create_task(anim_func(graphics, gu, state, state.interrupt_event))
     try:
         await uasyncio.wait_for(task, timeout=max_runtime_s)
@@ -56,6 +58,7 @@ async def run_named_animation(animation_name, max_runtime_s):
         log(f"Animation {animation_name} ended after {max_runtime_s}s", "INFO", uptime=True)
     except Exception as e:
         log(f"Animation {animation_name} error: {e}", "ERROR")
+        success = False
     finally:
         state.animation_active = False
         state.interrupt_event.set()
@@ -63,6 +66,8 @@ async def run_named_animation(animation_name, max_runtime_s):
         if module_path in sys.modules:
             del sys.modules[module_path]
         gc.collect()
+    
+    return success
 
 async def run_random_animation(max_runtime_s):
     animation_name = random.choice(ANIMATION_LIST)

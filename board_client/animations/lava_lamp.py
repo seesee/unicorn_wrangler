@@ -11,12 +11,20 @@ class LavaBlob:
         self.radius = radius
         self.vx = 0.0  # Horizontal velocity (used for split momentum)
         self.vy = 0.0  # Vertical velocity (used for split momentum)
-        self.state = "cold"  # "cold", "heating", "hot", "cooling"
+        self.state = "cold"  # "cold", "heating", "hot", "cooling", "merging", "splitting"
         self.heat_time = 0  # How long blob has been heating/cooling
         self.color_hue = random.uniform(0.0, 1.0)  # Individual color identity
         self.stretch_y = 1.0  # Vertical stretch factor for teardrop shapes
         self.at_bottom = True
         self.at_top = False
+        
+        # Transition state for gradual merging/splitting
+        self.transition_timer = 0.0
+        self.transition_duration = 1.5  # Seconds for merge/split animation
+        self.target_radius = radius  # Target size during transitions
+        self.original_radius = radius  # Original size before transition
+        self.merge_partner = None  # Reference to blob we're merging with
+        self.split_children = None  # List of blobs created from splitting
         
     def update_lifecycle(self, lamp_height, lamp_width, dt, rotated=False):
         """Update blob lifecycle with virtual heating/cooling zones"""
@@ -67,6 +75,50 @@ class LavaBlob:
             cooling_time = (2.0 / math.sqrt(self.radius)) / cool_multiplier
             if self.heat_time > cooling_time:
                 self.state = "cold"
+                
+        elif self.state == "merging":
+            # Gradually grow towards target size and move towards merge point
+            self.transition_timer += dt
+            progress = min(1.0, self.transition_timer / self.transition_duration)
+            
+            # Smooth transition using ease-in-out curve
+            smooth_progress = 0.5 * (1 + math.sin(math.pi * (progress - 0.5)))
+            
+            # Gradually change radius
+            self.radius = self.original_radius + (self.target_radius - self.original_radius) * smooth_progress
+            
+            # Move towards merge partner if it still exists
+            if self.merge_partner and hasattr(self.merge_partner, 'x'):
+                target_x = (self.x + self.merge_partner.x) / 2
+                target_y = (self.y + self.merge_partner.y) / 2
+                self.x += (target_x - self.x) * smooth_progress * 0.3
+                self.y += (target_y - self.y) * smooth_progress * 0.3
+            
+            # Complete merge when timer expires
+            if progress >= 1.0:
+                self.state = "hot"
+                self.transition_timer = 0.0
+                self.merge_partner = None
+                
+        elif self.state == "splitting":
+            # Gradually shrink and separate from original position
+            self.transition_timer += dt
+            progress = min(1.0, self.transition_timer / self.transition_duration)
+            
+            # Smooth transition using ease-in-out curve
+            smooth_progress = 0.5 * (1 + math.sin(math.pi * (progress - 0.5)))
+            
+            # Gradually change radius
+            self.radius = self.original_radius - (self.original_radius - self.target_radius) * smooth_progress
+            
+            # Complete split when timer expires
+            if progress >= 1.0:
+                # Determine final state based on size
+                if self.target_radius < self.original_radius * 0.7:
+                    self.state = "cooling"  # Smaller blobs start cooling
+                else:
+                    self.state = "hot"  # Larger blobs stay hot
+                self.transition_timer = 0.0
     
     def get_rise_speed(self, rotated=False):
         """Calculate how fast blob should rise/fall"""
@@ -80,9 +132,17 @@ class LavaBlob:
         elif self.state == "heating":
             progress = min(1.0, self.heat_time / (3.0 / math.sqrt(self.radius)))
             return base_speed * (1.0 - progress * 1.8)  # Gradually start rising
-        else:  # cooling
+        elif self.state == "cooling":
             progress = min(1.0, self.heat_time / (2.0 / math.sqrt(self.radius)))
             return -base_speed * (1.5 - progress * 2.3)  # Gradually start falling
+        elif self.state == "merging":
+            # Slow movement during merge - gradually rise
+            return -base_speed * 0.5
+        elif self.state == "splitting":
+            # Slow movement during split - maintain position mostly
+            return base_speed * 0.1
+        else:
+            return 0.0
     
     def update_physics(self, lamp_height, lamp_width, dt, rotated=False):
         """Physics with split momentum and lifecycle behavior"""
@@ -146,12 +206,29 @@ class LavaBlob:
             hue = (base_hue + self.color_hue * 0.1) % 1.0
             saturation = 0.9
             value = 0.8
-        else:  # cooling
+        elif self.state == "cooling":
             # Cooling down - mix of warm and cool
             progress = min(1.0, self.heat_time / (2.0 / math.sqrt(self.radius)))
             hue = (base_hue + self.color_hue * 0.1 + progress * 0.4) % 1.0
             saturation = 0.9 - progress * 0.2
             value = 0.8 - progress * 0.4
+        elif self.state == "merging":
+            # Bright, pulsing color during merge
+            pulse = 0.8 + 0.2 * fast_sin(self.transition_timer * 8)  # Fast pulsing
+            hue = (base_hue + self.color_hue * 0.05) % 1.0
+            saturation = 1.0
+            value = pulse
+        elif self.state == "splitting":
+            # Flickering, unstable color during split
+            flicker = 0.6 + 0.4 * fast_sin(self.transition_timer * 12)  # Faster flickering
+            hue = (base_hue + self.color_hue * 0.2 + self.transition_timer * 0.1) % 1.0
+            saturation = 0.9
+            value = flicker
+        else:
+            # Default fallback
+            hue = (base_hue + self.color_hue * 0.2) % 1.0
+            saturation = 0.8
+            value = 0.6
             
         return hsv_to_rgb(hue, saturation, value)
 
@@ -196,7 +273,7 @@ class LavaLamp:
             self.blobs.append(LavaBlob(x, y, radius))
     
     def check_merging(self):
-        """Merge nearby blobs with size and state restrictions"""
+        """Initiate gradual merging for nearby blobs with size and state restrictions"""
         # Allow merging regardless of blob count since merging reduces blob count
         # This helps reduce visual clutter when there are too many blobs
             
@@ -204,8 +281,8 @@ class LavaLamp:
             for j in range(i + 1, len(self.blobs)):
                 blob1, blob2 = self.blobs[i], self.blobs[j]
                 
-                # Only merge if both are hot and rising
-                if blob1.state != "hot" or blob2.state != "hot":
+                # Only merge if both are hot and not already in transition
+                if (blob1.state not in ["hot"] or blob2.state not in ["hot"]):
                     continue
                 
                 # Size compatibility check - more lenient now
@@ -224,47 +301,48 @@ class LavaLamp:
                 
                 # More generous merge distance
                 if dist < (blob1.radius + blob2.radius) * 0.85:
-                    # Create merged blob with combined mass
-                    total_area = blob1.radius**2 + blob2.radius**2
+                    # Start gradual merge - keep the larger blob and remove the smaller one
+                    if blob1.radius >= blob2.radius:
+                        primary_blob = blob1
+                        secondary_blob = blob2
+                    else:
+                        primary_blob = blob2
+                        secondary_blob = blob1
+                    
+                    # Calculate merged properties
+                    total_area = primary_blob.radius**2 + secondary_blob.radius**2
                     new_radius = math.sqrt(total_area)
                     
-                    # Position between the two
-                    new_x = (blob1.x + blob2.x) / 2
-                    new_y = (blob1.y + blob2.y) / 2
+                    # Set up merge transition on primary blob
+                    primary_blob.state = "merging"
+                    primary_blob.transition_timer = 0.0
+                    primary_blob.original_radius = primary_blob.radius
+                    primary_blob.target_radius = new_radius
+                    primary_blob.merge_partner = secondary_blob
+                    primary_blob.color_hue = (primary_blob.color_hue + secondary_blob.color_hue) / 2
                     
-                    # Create new blob - stays hot
-                    merged_blob = LavaBlob(new_x, new_y, new_radius)
-                    merged_blob.state = "hot"
-                    merged_blob.heat_time = min(blob1.heat_time, blob2.heat_time)
-                    # Mix colors slightly
-                    merged_blob.color_hue = (blob1.color_hue + blob2.color_hue) / 2
-                    
-                    # Remove original blobs and add merged one
-                    self.blobs.pop(j)  # Remove higher index first
-                    self.blobs.pop(i)
-                    self.blobs.append(merged_blob)
+                    # Remove secondary blob immediately (it will be absorbed)
+                    self.blobs.remove(secondary_blob)
                     return  # Only merge one pair per frame
     
     def check_splitting(self):
-        """Split large unstable blobs with size-dependent thresholds"""
+        """Initiate gradual splitting for large unstable blobs"""
         # Scale max blob count and split threshold based on display size
         total_pixels = self.width * self.height
         if total_pixels < 300:
             max_blobs = 6
             split_threshold = 3.2  # Smaller threshold for small displays
-            split_chance = 0.025   # Slightly higher chance
+            split_chance = 0.015   # Lower chance for more gradual splitting
         elif total_pixels < 800:
             max_blobs = 8
             split_threshold = 3.8  # Medium threshold 
-            split_chance = 0.03    # Higher chance for more interaction
+            split_chance = 0.02    # Lower chance for more gradual splitting
         else:
             max_blobs = 10
             split_threshold = 4.2  # Larger threshold for big displays
-            split_chance = 0.025   # Standard chance
+            split_chance = 0.015   # Lower chance for more gradual splitting
             
-        for i in range(len(self.blobs) - 1, -1, -1):
-            blob = self.blobs[i]
-            
+        for blob in self.blobs:
             # Large hot blobs are unstable and split
             if (blob.radius > split_threshold and blob.state == "hot" and 
                 random.random() < split_chance and len(self.blobs) < max_blobs):
@@ -278,7 +356,7 @@ class LavaLamp:
                 small_radius = blob.radius * math.sqrt(small_fraction)
                 
                 # Position them with some separation
-                separation = blob.radius * 0.8
+                separation = blob.radius * 1.2
                 angle = random.uniform(0, 2 * math.pi)
                 
                 # Position with more separation to prevent immediate recombination
@@ -287,36 +365,42 @@ class LavaLamp:
                 
                 # Create the larger blob (inherits hot state, continues rising)
                 large_blob = LavaBlob(
-                    blob.x + offset_x * 0.4,
-                    blob.y + offset_y * 0.4,
+                    blob.x + offset_x * 0.3,
+                    blob.y + offset_y * 0.3,
                     large_radius
                 )
-                large_blob.state = "hot"
+                large_blob.state = "splitting"
+                large_blob.transition_timer = 0.0
+                large_blob.original_radius = blob.radius
+                large_blob.target_radius = large_radius
                 large_blob.heat_time = blob.heat_time
                 large_blob.color_hue = (blob.color_hue + 0.05) % 1.0  # Slight hue shift
-                # Add velocity to push away from split
-                large_blob.vx = fast_cos(angle) * 0.4
-                large_blob.vy = fast_sin(angle) * 0.4
+                # Add gentle velocity to push away from split
+                large_blob.vx = fast_cos(angle) * 0.2
+                large_blob.vy = fast_sin(angle) * 0.2
                 
-                # Create the smaller blob (starts cooling immediately, will fall sooner)
+                # Create the smaller blob (starts cooling, will fall sooner)
                 small_blob = LavaBlob(
-                    blob.x - offset_x * 0.6,  # Opposite side, farther away
-                    blob.y - offset_y * 0.6,
+                    blob.x - offset_x * 0.5,  # Opposite side, farther away
+                    blob.y - offset_y * 0.5,
                     small_radius
                 )
-                small_blob.state = "cooling"  # Starts cooling right away
+                small_blob.state = "splitting"
+                small_blob.transition_timer = 0.0
+                small_blob.original_radius = blob.radius
+                small_blob.target_radius = small_radius
                 small_blob.heat_time = 0
                 small_blob.color_hue = (blob.color_hue - 0.15) % 1.0  # More dramatic hue shift
                 # Add stronger velocity to push away
-                small_blob.vx = -fast_cos(angle) * 0.8
-                small_blob.vy = -fast_sin(angle) * 0.8
+                small_blob.vx = -fast_cos(angle) * 0.4
+                small_blob.vy = -fast_sin(angle) * 0.4
                 
-                # Add split timers to prevent immediate recombining (reduced)
-                large_blob.split_timer = 40  # ~3 seconds at 12fps
-                small_blob.split_timer = 40
+                # Add split timers to prevent immediate recombining (longer for gradual effect)
+                large_blob.split_timer = 60  # ~5 seconds at 12fps
+                small_blob.split_timer = 60
                 
-                # Replace original with the two new ones
-                self.blobs.pop(i)
+                # Replace original blob with the two new ones
+                self.blobs.remove(blob)
                 self.blobs.extend([large_blob, small_blob])
                 return  # Only split one per frame
     
@@ -373,8 +457,8 @@ class LavaLamp:
             # Create rainbow hue that cycles over time and position
             rainbow_hue = (self.background_time * 0.1 + gradient_pos * 0.8) % 1.0
             
-            # Very dim rainbow colors (low saturation and value) - compute once per row
-            bg_r, bg_g, bg_b = hsv_to_rgb(rainbow_hue, 0.3, 0.15)  # Subtle colors
+            # Subtle rainbow colors with more saturation and brightness - compute once per row
+            bg_r, bg_g, bg_b = hsv_to_rgb(rainbow_hue, 0.6, 0.08)  # More saturated and slightly brighter
             graphics.set_pen(graphics.create_pen(bg_r, bg_g, bg_b))
             
             # Draw entire row with the same color

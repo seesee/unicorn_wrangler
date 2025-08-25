@@ -42,12 +42,22 @@ parser.add_argument(
     default=None,
     help="Animation duration in seconds (overrides config max_runtime_s)"
 )
+parser.add_argument(
+    "--max-iterations",
+    type=int,
+    default=0,
+    help="Maximum number of animation iterations to run before exiting (0 = infinite, default: 0)"
+)
 
 args = parser.parse_args()
 
 # Validate duration argument
 if args.duration is not None and args.duration <= 0:
     parser.error("--duration must be > 0")
+
+# Validate max-iterations argument
+if args.max_iterations < 0:
+    parser.error("--max-iterations must be >= 0")
 
 # Patch sys.path so imports work
 import os
@@ -76,6 +86,13 @@ from uw.transitions import melt_off, countdown
 
 # Force sequence override (handy for debugging specific animations) 
 if args.animation:
+    # Validate animation exists before overriding sequence
+    animation_list = get_animation_list()
+    if args.animation not in animation_list:
+        print(f"Error: Animation '{args.animation}' not found.")
+        print(f"Available animations: {', '.join(sorted(animation_list))}")
+        sys.exit(1)
+    
     # Override the animation sequence in config
     config._config["general"]["sequence"] = [args.animation]
 
@@ -108,6 +125,9 @@ async def main():
         log("MQTT disabled.", "INFO")
     sequence = list(config.get("general", "sequence", ["*"]))
     animation_list = get_animation_list()
+    
+    iteration_count = 0
+    max_iterations = args.max_iterations
 
     while True:
         if not state.display_on:
@@ -125,9 +145,26 @@ async def main():
         if job == "*" or job == "animation":
             await run_random_animation(duration)
         elif job in animation_list:
-            await run_named_animation(job, duration)
+            success = await run_named_animation(job, duration)
+            # If specific animation was requested and failed, exit
+            if args.animation and not success:
+                print(f"Error: Animation '{args.animation}' failed to run properly.")
+                sys.exit(1)
         else:
             log(f"Unknown sequence job: {job}", "WARN")
+            # If specific animation was requested but not found, exit
+            if args.animation:
+                print(f"Error: Animation '{args.animation}' not found in sequence.")
+                sys.exit(1)
+        
+        # Increment iteration counter and check if we should exit
+        iteration_count += 1
+        if max_iterations > 0 and iteration_count >= max_iterations:
+            if args.animation:
+                print(f"Animation '{args.animation}' completed {iteration_count} iterations successfully.")
+            else:
+                print(f"Completed {iteration_count} animation iterations.")
+            sys.exit(0)
 
 if __name__ == "__main__":
     try:
