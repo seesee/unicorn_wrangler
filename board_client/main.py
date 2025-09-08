@@ -72,11 +72,29 @@ async def handle_interrupts():
         # Priority 2: Handle text messages
         if state.text_message:
             from animations.text_scroller import run as run_text_scroller
-            await run_text_scroller(
-                graphics, gu, state, state.interrupt_event,
-                state.text_message, state.text_repeat_count
-            )
-            state.text_message = None
+            try:
+                # Timeout text scroller to prevent hanging (30s max)
+                await uasyncio.wait_for(
+                    run_text_scroller(
+                        graphics, gu, state, state.interrupt_event,
+                        state.text_message, state.text_repeat_count
+                    ),
+                    timeout=30
+                )
+            except uasyncio.TimeoutError:
+                log("Text scroller timed out after 30s", "ERROR")
+                # Clear display after timeout
+                graphics.set_pen(graphics.create_pen(0, 0, 0))
+                graphics.clear()
+                gu.update(graphics)
+            except Exception as e:
+                log(f"Text scroller error: {e}", "ERROR")
+                # Clear display after error
+                graphics.set_pen(graphics.create_pen(0, 0, 0))
+                graphics.clear()
+                gu.update(graphics)
+            finally:
+                state.text_message = None
             return True
             
     return False
