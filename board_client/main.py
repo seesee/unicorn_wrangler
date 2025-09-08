@@ -56,17 +56,47 @@ def get_next_random_animation(random_pool, pool_index):
     animation = random_pool[pool_index]
     return animation, pool_index + 1
 
-async def handle_text_interrupt():
+async def handle_interrupts():
+    """Handle all interrupt events - animation requests and text messages"""
     if state.interrupt_event.is_set():
         state.interrupt_event.clear()
+        
+        # Priority 1: Handle animation requests first
+        if state.requested_animation:
+            animation_name = state.requested_animation
+            state.requested_animation = None  # Clear after reading (one-time use)
+            log(f"Running requested animation: {animation_name}", "INFO")
+            await run_named_animation(animation_name, config.get("general", "max_runtime_s", 120))
+            return True
+            
+        # Priority 2: Handle text messages
         if state.text_message:
             from animations.text_scroller import run as run_text_scroller
-            await run_text_scroller(
-                graphics, gu, state, state.interrupt_event,
-                state.text_message, state.text_repeat_count
-            )
-            state.text_message = None
+            try:
+                # Timeout text scroller to prevent hanging (30s max)
+                await uasyncio.wait_for(
+                    run_text_scroller(
+                        graphics, gu, state, state.interrupt_event,
+                        state.text_message, state.text_repeat_count
+                    ),
+                    timeout=30
+                )
+            except uasyncio.TimeoutError:
+                log("Text scroller timed out after 30s", "ERROR")
+                # Clear display after timeout
+                graphics.set_pen(graphics.create_pen(0, 0, 0))
+                graphics.clear()
+                gu.update(graphics)
+            except Exception as e:
+                log(f"Text scroller error: {e}", "ERROR")
+                # Clear display after error
+                graphics.set_pen(graphics.create_pen(0, 0, 0))
+                graphics.clear()
+                gu.update(graphics)
+            finally:
+                state.text_message = None
             return True
+            
     return False
 
 async def main():
@@ -100,8 +130,8 @@ async def main():
                 await uasyncio.sleep(0.2)
             await countdown()
 
-        # publish mqtt text message here (and later -- todo: probably refactor as above)
-        if await handle_text_interrupt():
+        # Handle all interrupt events (animation requests, text messages, etc.)
+        if await handle_interrupts():
             continue
 
         if state.max_iterations != 0:
@@ -130,7 +160,7 @@ async def main():
             log(f"Maximum iterations reached, resetting", "INFO")
             machine.reset()
 
-        if await handle_text_interrupt():
+        if await handle_interrupts():
             continue
 
 

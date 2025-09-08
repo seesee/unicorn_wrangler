@@ -19,18 +19,30 @@ async def run(graphics, gu, state, interrupt_event):
     orbit_speed2 = 0.015
     orbit_speed3 = 0.018  # Third speed between the other two
     
-    # Pre-allocate white pen for background
-    white_pen = graphics.create_pen(255, 255, 255)
-    
     # Pre-calculate distance lookup tables for all pixels relative to display center
     # We'll adjust these for orbiting centers each frame
     center_x = WIDTH // 2
     center_y = HEIGHT // 2
     
     while not interrupt_event.is_set():
-        # Fill background with white
-        graphics.set_pen(white_pen)
-        graphics.rectangle(0, 0, WIDTH, HEIGHT)
+        # Efficient row-based rainbow background
+        background_value = 0.15
+        background_sat = 0.8
+        background_speed = 0.1
+        
+        # Dynamic band height based on display height (3 rows minimum, scale up for larger displays)
+        band_height = max(3, HEIGHT // 8)  # Gives ~8 color bands across the display
+        
+        for y in range(HEIGHT):
+            # Calculate which color band this row belongs to
+            band_index = y // band_height
+            current_hue = ((band_index * 0.1) + (time * background_speed)) % 1.0
+            r, g, b = hsv_to_rgb(current_hue, background_sat, background_value)
+            bg_pen = graphics.create_pen(int(r), int(g), int(b))
+            graphics.set_pen(bg_pen)
+            # Draw entire row at once - fill complete width
+            for x in range(WIDTH):
+                graphics.pixel(x, y)
         
         # Calculate three orbiting center positions - no minimum distance constraints
         center1_x = center_x + orbit_rad * fast_cos(time * orbit_speed1)

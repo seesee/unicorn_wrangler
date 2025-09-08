@@ -8,6 +8,7 @@ class State:
         self.interrupt_event = uasyncio.Event()
         self.text_message = None
         self.next_animation = None
+        self.requested_animation = None  # One-time animation request (doesn't lock)
         self.text_repeat_count = 1
         self.text_scrolling_active = False
         self.transition_mode = None

@@ -51,6 +51,7 @@ class MQTTService:
             self.client.subscribe(config.get("mqtt", "topic_on_off", "unicorn/control/onoff"))
             self.client.subscribe(config.get("mqtt", "topic_cmd", "unicorn/control/cmd"))
             self.client.subscribe(config.get("mqtt", "topic_text_message", "unicorn/message/text"))
+            self.client.subscribe(config.get("mqtt", "topic_animation", "unicorn/control/animation"))
             return True
         except Exception as e:
             log(f"MQTT connection failed: {e}", "WARN")
@@ -122,6 +123,70 @@ class MQTTService:
                 state.text_message = text
                 state.text_repeat_count = max(1, repeat)
                 state.interrupt_event.set()
+                
+        elif topic == config.get("mqtt", "topic_animation", "unicorn/control/animation"):
+            if msg:
+                self._handle_animation_request(msg)
+
+    def _handle_animation_request(self, msg):
+        """Handle animation requests with optional client targeting"""
+        import ujson
+        from uw.animation_service import ANIMATION_LIST
+        
+        try:
+            # Parse JSON message
+            if msg.startswith('{') and msg.endswith('}'):
+                data = ujson.loads(msg)
+                animation_name = data.get("animation", "")
+                target_client_id = data.get("client_id", None)
+            else:
+                # Simple string message - just animation name, no targeting
+                animation_name = msg.strip()
+                target_client_id = None
+            
+            if not animation_name:
+                log("Empty animation name in MQTT request", "WARN")
+                return
+            
+            # Check if this request targets a specific client or pattern
+            if target_client_id is not None:
+                # Check if our client_id matches the target pattern (anchored match)
+                if not self._client_matches_target(target_client_id):
+                    log(f"Animation request for '{target_client_id}' - not matching our client_id '{self.client_id}'", "DEBUG")
+                    return
+                else:
+                    log(f"Animation request matches our client_id pattern", "DEBUG")
+            else:
+                log("Animation request for all clients", "DEBUG")
+            
+            # Validate animation exists
+            if animation_name not in ANIMATION_LIST:
+                log(f"Unknown animation '{animation_name}' requested via MQTT. Available: {ANIMATION_LIST}", "WARN")
+                return
+            
+            # Set the one-time animation request and interrupt current one
+            log(f"MQTT animation request: {animation_name}", "INFO")
+            state.requested_animation = animation_name
+            state.display_on = True
+            state.interrupt_event.set()
+            
+        except Exception as e:
+            log(f"Failed to parse animation request '{msg}': {e}", "WARN")
+    
+    def _client_matches_target(self, target_pattern):
+        """Check if our client_id matches the target pattern (anchored match)"""
+        if not self.client_id or not target_pattern:
+            return False
+        
+        # Exact match
+        if self.client_id == target_pattern:
+            return True
+        
+        # Anchored prefix match (target_pattern is start of our client_id)
+        if self.client_id.startswith(target_pattern):
+            return True
+        
+        return False
 
     async def loop(self):
         """Message handling loop - only runs after successful connection"""

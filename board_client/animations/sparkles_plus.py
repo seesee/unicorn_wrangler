@@ -35,20 +35,20 @@ async def run(graphics, gu, state, interrupt_event):
     cosmic_pixels = 32 * 32  # 1024
     cosmic_sparkles = 120
     
-    # Calculate target sparkles based on pixel density
-    TARGET_SPARKLES = max(20, int((total_pixels / cosmic_pixels) * cosmic_sparkles))
+    # Calculate target sparkles based on pixel density - increase by 50%
+    TARGET_SPARKLES = max(30, int((total_pixels / cosmic_pixels) * cosmic_sparkles * 1.5))
     
-    # Allow sparkle count to vary within +/- 5 range
-    MIN_SPARKLES = max(10, TARGET_SPARKLES - 5)
-    MAX_SPARKLES = TARGET_SPARKLES + 5
+    # Allow sparkle count to vary within +/- 8 range for more variety
+    MIN_SPARKLES = max(15, TARGET_SPARKLES - 8)
+    MAX_SPARKLES = TARGET_SPARKLES + 8
     
-    # Much slower sparkle appearance rate to spread them out over time
-    NEW_SPARKLES_MIN = 0  # Sometimes no new sparkles
-    NEW_SPARKLES_MAX = 1  # Maximum 1 per frame
+    # Faster sparkle appearance rate for more activity
+    NEW_SPARKLES_MIN = 1  # Always at least 1 new sparkle
+    NEW_SPARKLES_MAX = 2  # Maximum 2 per frame
     
-    # Random fade durations between 1-2 seconds
-    MIN_FADE_DURATION = 1.0  # 1 second minimum fade
-    MAX_FADE_DURATION = 2.0  # 2 second maximum fade
+    # Faster fade durations - cap at 1 second
+    MIN_FADE_DURATION = 0.5  # 0.5 second minimum fade
+    MAX_FADE_DURATION = 1.0  # 1 second maximum fade
     
     FRAME_DELAY = 0.04
     

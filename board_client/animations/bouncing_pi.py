@@ -62,10 +62,18 @@ async def run(graphics, gu, state, interrupt_event):
 
         bounced = False
 
+        # Allow occasional escape on left and bottom edges (15% chance)
+        escape_chance = 0.15
+        
         if x < 0:
-            x = 0
-            dx = 1
-            bounced = True
+            # 15% chance to allow escape 1 pixel beyond left edge
+            if dx < 0 and x >= -1 and random.random() < escape_chance:
+                # Allow escape, don't bounce yet
+                pass
+            else:
+                x = 0
+                dx = 1
+                bounced = True
         elif x > WIDTH - PI_W:
             x = WIDTH - PI_W
             dx = -1
@@ -76,9 +84,14 @@ async def run(graphics, gu, state, interrupt_event):
             dy = 1
             bounced = True
         elif y > HEIGHT - PI_H:
-            y = HEIGHT - PI_H
-            dy = -1
-            bounced = True
+            # 15% chance to allow escape 1 pixel beyond bottom edge
+            if dy > 0 and y <= HEIGHT - PI_H + 1 and random.random() < escape_chance:
+                # Allow escape, don't bounce yet
+                pass
+            else:
+                y = HEIGHT - PI_H
+                dy = -1
+                bounced = True
 
         # Handle bouncing and super saiyan mode activation
         if bounced:
