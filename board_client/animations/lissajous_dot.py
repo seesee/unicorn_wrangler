@@ -13,8 +13,8 @@ async def run(graphics, gu, state, interrupt_event):
     
     center_x = WIDTH // 2
     center_y = HEIGHT // 2
-    amp_x = WIDTH // 2 - 1  # Leave 1 pixel margin
-    amp_y = HEIGHT // 2 - 1
+    amp_x = WIDTH // 2
+    amp_y = HEIGHT // 2
     
     t = 0.0
     hue = random.random()  # Start with random hue
@@ -58,7 +58,7 @@ async def run(graphics, gu, state, interrupt_event):
         x = int(center_x + amp_x * fast_sin(a * t + delta))
         y = int(center_y + amp_y * fast_sin(b * t))
         
-        # Ensure position is within bounds
+        # Ensure position is within bounds (but allow full range 0 to WIDTH-1/HEIGHT-1)
         x = max(0, min(WIDTH - 1, x))
         y = max(0, min(HEIGHT - 1, y))
         
